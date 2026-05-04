@@ -39,3 +39,14 @@ def test_defun_one_param() -> None:
 def test_defun_two_params() -> None:
     cpu = _run_module("(defun add (a b) (+ a b))(add 10 20)")
     assert cpu.dm[STACK_BASE] == 30
+
+
+def test_defun_forward_call() -> None:
+    """Вызов функции, объявленной ниже по тексту."""
+    cpu = _run_module("(defun a () (b))(defun b () 1)(a)")
+    assert cpu.dm[STACK_BASE] == 1
+
+
+def test_defun_forward_call_with_param() -> None:
+    cpu = _run_module("(defun f (x) (g x))(defun g (y) (+ y 1))(f 4)")
+    assert cpu.dm[STACK_BASE] == 5

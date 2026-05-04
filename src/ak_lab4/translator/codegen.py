@@ -349,35 +349,61 @@ def _emit(
 
 
 def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> list[int]:
+    """Два прохода: сначала длины тел (CALL с фиктивным 0), затем раскладка и эмит с реальными PC.
+
+    Так вызовы функций, объявленных ниже в файле, получают правильный адрес, и if/jz/jmp
+    используют итоговый start_pc функции.
+    """
     all_forms = tuple(defuns) + mains
     global_slots, param_slot_addr = _collect_bindings(all_forms)
 
-    func_param_sig: dict[str, tuple[str, ...]] = {}
-    for d in defuns:
-        fn, ps, _ = _parse_defun_full(d)
-        func_param_sig[fn] = ps
-
-    words: list[int] = []
-    jmp_ix = 0
-    words.append(pack_word(Opcode.JMP, 0))
-
-    func_targets: dict[str, int] = {}
+    ordered: list[tuple[str, Expr]] = []
     seen_names: set[str] = set()
-
+    func_param_sig: dict[str, tuple[str, ...]] = {}
     for d in defuns:
         name, params, body = _parse_defun_full(d)
         if name in seen_names:
             raise CodegenError(f"Повторное определение функции «{name}»")
         seen_names.add(name)
-        start_pc = len(words)
-        func_targets[name] = start_pc
-        param_scope = {p: param_slot_addr[name, p] for p in params}
+        func_param_sig[name] = params
+        ordered.append((name, body))
+
+    names = [n for n, _ in ordered]
+    dummy_targets: dict[str, int] = {n: 0 for n in names}
+
+    lens: dict[str, int] = {}
+    for name, body in ordered:
+        param_scope = {p: param_slot_addr[name, p] for p in func_param_sig[name]}
+        chunk = _emit(
+            body,
+            global_slots,
+            0,
+            dummy_targets,
+            param_scope,
+            func_param_sig,
+            param_slot_addr,
+        )
+        lens[name] = len(chunk)
+
+    starts: dict[str, int] = {}
+    pos = 1
+    for name, _ in ordered:
+        starts[name] = pos
+        pos += lens[name] + 2
+
+    main_start = pos
+    full_targets: dict[str, int] = {n: starts[n] for n in names}
+
+    words: list[int] = [pack_word(Opcode.JMP, 0)]
+    for name, body in ordered:
+        start_pc = starts[name]
+        param_scope = {p: param_slot_addr[name, p] for p in func_param_sig[name]}
         words.extend(
             _emit(
                 body,
                 global_slots,
                 start_pc,
-                func_targets,
+                full_targets,
                 param_scope,
                 func_param_sig,
                 param_slot_addr,
@@ -386,8 +412,7 @@ def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> 
         words.append(pack_word(Opcode.SWAP, 0))
         words.append(pack_word(Opcode.RET, 0))
 
-    main_start = len(words)
-    words[jmp_ix] = pack_word(Opcode.JMP, main_start)
+    words[0] = pack_word(Opcode.JMP, main_start)
 
     main_expr = mains[0] if len(mains) == 1 else SList((Symbol("progn"),) + mains)
     words.extend(
@@ -395,7 +420,7 @@ def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> 
             main_expr,
             global_slots,
             main_start,
-            func_targets,
+            full_targets,
             None,
             func_param_sig,
             param_slot_addr,
