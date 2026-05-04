@@ -64,21 +64,26 @@ def _emit_n_ary(
     args: tuple[Expr, ...],
     name: str,
     slots: dict[str, int],
+    pc0: int,
 ) -> list[int]:
     if len(args) < 2:
         raise CodegenError(f"{name} требует минимум два аргумента")
-    words: list[int] = []
-    words.extend(_emit(args[0], slots))
-    words.extend(_emit(args[1], slots))
-    words.append(pack_word(op, 0))
+    out: list[int] = []
+    cur = pc0
+    out.extend(_emit(args[0], slots, cur))
+    cur = pc0 + len(out)
+    out.extend(_emit(args[1], slots, cur))
+    cur = pc0 + len(out)
+    out.append(pack_word(op, 0))
     for extra in args[2:]:
-        words.extend(_emit(extra, slots))
-        words.append(pack_word(op, 0))
-    return words
+        cur = pc0 + len(out)
+        out.extend(_emit(extra, slots, cur))
+        out.append(pack_word(op, 0))
+    return out
 
 
-def _emit(e: Expr, slots: dict[str, int]) -> list[int]:
-    """Слова без финального HALT (для вложенных выражений)."""
+def _emit(e: Expr, slots: dict[str, int], pc0: int) -> list[int]:
+    """Слова без HALT; `pc0` — абсолютный индекс первой инструкции в общем IM."""
     match e:
         case IntLit(v):
             v2 = _check_imm24(v)
@@ -108,38 +113,43 @@ def _emit(e: Expr, slots: dict[str, int]) -> list[int]:
                 addr = slots.get(sym_el.name)
                 if addr is None:
                     raise CodegenError(f"Внутренняя ошибка: слот для «{sym_el.name}» не найден")
-                words = [
-                    pack_word(Opcode.PUSH_IMM, _check_imm24(addr)),
-                    *_emit(rhs, slots),
-                    pack_word(Opcode.STORE, 0),
-                    pack_word(Opcode.PUSH_IMM, _check_imm24(addr)),
-                    pack_word(Opcode.LOAD, 0),
-                ]
-                return words
+                head_w = [pack_word(Opcode.PUSH_IMM, _check_imm24(addr))]
+                rhs_start = pc0 + 1
+                return (
+                    head_w
+                    + _emit(rhs, slots, rhs_start)
+                    + [
+                        pack_word(Opcode.STORE, 0),
+                        pack_word(Opcode.PUSH_IMM, _check_imm24(addr)),
+                        pack_word(Opcode.LOAD, 0),
+                    ]
+                )
             if head.name == "if":
                 if len(args) != 3:
                     raise CodegenError("if ожидает ровно три аргумента (условие then else)")
                 pred_e, then_e, else_e = args
-                words: list[int] = []
-                words.extend(_emit(pred_e, slots))
-                jz_ix = len(words)
-                words.append(pack_word(Opcode.JZ, 0))
-                words.extend(_emit(then_e, slots))
-                jmp_ix = len(words)
-                words.append(pack_word(Opcode.JMP, 0))
-                else_pc = len(words)
-                words[jz_ix] = pack_word(Opcode.JZ, else_pc)
-                words.extend(_emit(else_e, slots))
-                end_pc = len(words)
-                words[jmp_ix] = pack_word(Opcode.JMP, end_pc)
-                return words
+                pred_c = _emit(pred_e, slots, pc0)
+                jz_pc = pc0 + len(pred_c)
+                then_start = jz_pc + 1
+                then_c = _emit(then_e, slots, then_start)
+                jmp_pc = then_start + len(then_c)
+                else_start = jmp_pc + 1
+                else_c = _emit(else_e, slots, else_start)
+                end_pc = else_start + len(else_c)
+                return (
+                    pred_c
+                    + [pack_word(Opcode.JZ, else_start)]
+                    + then_c
+                    + [pack_word(Opcode.JMP, end_pc)]
+                    + else_c
+                )
             op = _ARITH.get(head.name)
             if op is not None:
-                return _emit_n_ary(op, tuple(args), head.name, slots)
+                return _emit_n_ary(op, tuple(args), head.name, slots, pc0)
             raise CodegenError(f"Неизвестная форма: ({head.name} …)")
 
 
 def compile_program(expr: Expr) -> list[int]:
     """Одно выражение-программа: код и завершающий HALT."""
     slots = _collect_global_slots(expr)
-    return _emit(expr, slots) + [pack_word(Opcode.HALT, 0)]
+    return _emit(expr, slots, 0) + [pack_word(Opcode.HALT, 0)]
