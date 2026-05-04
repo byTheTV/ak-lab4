@@ -1,4 +1,4 @@
-"""Генерация машинных слов из AST (подмножество: литералы, n-арная арифметика)."""
+"""Генерация машинных слов из AST (литералы, арифметика, глобальный setq)."""
 
 from __future__ import annotations
 
@@ -29,20 +29,55 @@ def _check_imm24(v: int) -> int:
     return v
 
 
-def _emit_n_ary(op: Opcode, args: tuple[Expr, ...], name: str) -> list[int]:
+def _collect_global_slots(e: Expr) -> dict[str, int]:
+    """Имена из `(setq name …)` в preorder; каждому имя — слово статики с адреса 0."""
+
+    order: list[str] = []
+
+    def walk(ex: Expr) -> None:
+        match ex:
+            case SList(items):
+                if (
+                    len(items) >= 3
+                    and isinstance(items[0], Symbol)
+                    and items[0].name == "setq"
+                    and isinstance(items[1], Symbol)
+                ):
+                    order.append(items[1].name)
+                for it in items:
+                    walk(it)
+            case _:
+                pass
+
+    walk(e)
+    slots: dict[str, int] = {}
+    nxt = 0
+    for nm in order:
+        if nm not in slots:
+            slots[nm] = nxt
+            nxt += 1
+    return slots
+
+
+def _emit_n_ary(
+    op: Opcode,
+    args: tuple[Expr, ...],
+    name: str,
+    slots: dict[str, int],
+) -> list[int]:
     if len(args) < 2:
         raise CodegenError(f"{name} требует минимум два аргумента")
     words: list[int] = []
-    words.extend(_emit(args[0]))
-    words.extend(_emit(args[1]))
+    words.extend(_emit(args[0], slots))
+    words.extend(_emit(args[1], slots))
     words.append(pack_word(op, 0))
     for extra in args[2:]:
-        words.extend(_emit(extra))
+        words.extend(_emit(extra, slots))
         words.append(pack_word(op, 0))
     return words
 
 
-def _emit(e: Expr) -> list[int]:
+def _emit(e: Expr, slots: dict[str, int]) -> list[int]:
     """Слова без финального HALT (для вложенных выражений)."""
     match e:
         case IntLit(v):
@@ -51,19 +86,43 @@ def _emit(e: Expr) -> list[int]:
         case StrLit(_):
             raise CodegenError("Строковые литералы пока не генерируются")
         case Symbol(name):
-            raise CodegenError(f"Символ «{name}» без контекста (переменные — позже)")
+            addr = slots.get(name)
+            if addr is None:
+                raise CodegenError(f"Неизвестный символ «{name}» (нет setq в программе)")
+            return [
+                pack_word(Opcode.PUSH_IMM, _check_imm24(addr)),
+                pack_word(Opcode.LOAD, 0),
+            ]
         case SList(items):
             if not items:
                 raise CodegenError("Пустой список () недопустим как выражение")
             head, *args = items
             if not isinstance(head, Symbol):
                 raise CodegenError("Вызов: голова списка должна быть символом")
+            if head.name == "setq":
+                if len(args) != 2:
+                    raise CodegenError("setq ожидает ровно два аргумента (имя и выражение)")
+                sym_el, rhs = args
+                if not isinstance(sym_el, Symbol):
+                    raise CodegenError("setq: первый аргумент должен быть символом")
+                addr = slots.get(sym_el.name)
+                if addr is None:
+                    raise CodegenError(f"Внутренняя ошибка: слот для «{sym_el.name}» не найден")
+                words = [
+                    pack_word(Opcode.PUSH_IMM, _check_imm24(addr)),
+                    *_emit(rhs, slots),
+                    pack_word(Opcode.STORE, 0),
+                    pack_word(Opcode.PUSH_IMM, _check_imm24(addr)),
+                    pack_word(Opcode.LOAD, 0),
+                ]
+                return words
             op = _ARITH.get(head.name)
             if op is not None:
-                return _emit_n_ary(op, tuple(args), head.name)
+                return _emit_n_ary(op, tuple(args), head.name, slots)
             raise CodegenError(f"Неизвестная форма: ({head.name} …)")
 
 
 def compile_program(expr: Expr) -> list[int]:
     """Одно выражение-программа: код и завершающий HALT."""
-    return _emit(expr) + [pack_word(Opcode.HALT, 0)]
+    slots = _collect_global_slots(expr)
+    return _emit(expr, slots) + [pack_word(Opcode.HALT, 0)]
