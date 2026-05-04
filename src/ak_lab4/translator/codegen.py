@@ -1,4 +1,4 @@
-"""Генерация машинных слов из AST (литералы, арифметика, глобальный setq)."""
+"""Генерация машинных слов из AST (литералы, арифметика, setq, if)."""
 
 from __future__ import annotations
 
@@ -115,6 +115,23 @@ def _emit(e: Expr, slots: dict[str, int]) -> list[int]:
                     pack_word(Opcode.PUSH_IMM, _check_imm24(addr)),
                     pack_word(Opcode.LOAD, 0),
                 ]
+                return words
+            if head.name == "if":
+                if len(args) != 3:
+                    raise CodegenError("if ожидает ровно три аргумента (условие then else)")
+                pred_e, then_e, else_e = args
+                words: list[int] = []
+                words.extend(_emit(pred_e, slots))
+                jz_ix = len(words)
+                words.append(pack_word(Opcode.JZ, 0))
+                words.extend(_emit(then_e, slots))
+                jmp_ix = len(words)
+                words.append(pack_word(Opcode.JMP, 0))
+                else_pc = len(words)
+                words[jz_ix] = pack_word(Opcode.JZ, else_pc)
+                words.extend(_emit(else_e, slots))
+                end_pc = len(words)
+                words[jmp_ix] = pack_word(Opcode.JMP, end_pc)
                 return words
             op = _ARITH.get(head.name)
             if op is not None:
