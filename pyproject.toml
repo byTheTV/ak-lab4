@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=70.1", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ak-lab4"
+version = "0.1.0"
+description = "Лабораторная №4: транслятор и модель процессора"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.8",
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# F — pyflakes: в т.ч. F401 неиспользуемый импорт, F841 неиспользуемая переменная (простейший «мёртвый код»).
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["ak_lab4"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+show_error_codes = true
+mypy_path = "src"
+explicit_package_bases = true
+packages = ["ak_lab4"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
