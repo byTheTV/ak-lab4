@@ -100,13 +100,24 @@ jobs:
           check_name: Test Results
           comment_mode: off
 
-      - name: Job summary
+      - name: Job summary (coverage + подсказки)
         if: always()
         run: |
-          echo "## Тесты и покрытие" >> "$GITHUB_STEP_SUMMARY"
-          echo "- В этом же run открой check **Test Results** — таблица тестов pass/fail." >> "$GITHUB_STEP_SUMMARY"
-          echo "- Подробный лог pytest (в т.ч. coverage в консоли) — шаг **Pytest** выше." >> "$GITHUB_STEP_SUMMARY"
-          echo "- Сырые XML: артефакты **junit** и **coverage-xml**." >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Покрытие кода"
+            echo "Таблица из \`coverage.py\` по результатам шага **Pytest**."
+            echo ""
+            if [ -f .coverage ]; then
+              python -m coverage report --format=markdown --skip-covered || echo "_Не удалось вывести coverage report._"
+            else
+              echo "_Нет \`.coverage\` — pytest не записал данные._"
+            fi
+            echo ""
+            echo "---"
+            echo "## Тесты"
+            echo "- run: check **Test Results** (JUnit)."
+            echo "- Сырые XML: **junit**, **coverage-xml**."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test report (JUnit)
         if: always()
