@@ -88,7 +88,10 @@ jobs:
           python -m pytest \
             -v -ra --tb=short \
             --junitxml=junit.xml -o junit_family=xunit2 \
-            --cov=ak_lab4 --cov-report=xml --cov-report=term-missing:skip-covered
+            --cov=ak_lab4 \
+            --cov-report=xml \
+            --cov-report=term-missing:skip-covered \
+            --cov-report=markdown:coverage-summary.md
 
       # Отчёт в интерфейсе GitHub: вкладка run → слева check «Test Results» (не только ZIP)
       - name: Publish test results (JUnit → GitHub Checks)
@@ -100,32 +103,29 @@ jobs:
           check_name: Test Results
           comment_mode: off
 
-      - name: Job summary (покрытие + ссылки на checks)
+      # Summary виден на странице job «pytest» (внизу), не в check «Test Results» (там только JUnit).
+      - name: Job summary (покрытие + ссылки)
         if: always()
         env:
           COMMIT_CHECKS_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}/checks
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          set +e
           echo "## Покрытие кода" >> "$GITHUB_STEP_SUMMARY"
-          echo "Таблица из \`coverage.py\` после шага **Pytest** (без скачивания артефакта)." >> "$GITHUB_STEP_SUMMARY"
+          echo "> **Где смотреть:** открой job **pytest** (не «Test Results») → прокрути вниз до блока **Summary**. В левой колонке **Test Results** — только список тестов из JUnit, без coverage." >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ -f .coverage ]; then
-            python -m coverage report --format=markdown --skip-covered >> "$GITHUB_STEP_SUMMARY" 2>&1
-            cov_st=$?
-            if [ "$cov_st" != 0 ]; then
-              echo "" >> "$GITHUB_STEP_SUMMARY"
-              echo "_Не удалось вывести \`coverage report\` (код $cov_st)._ " >> "$GITHUB_STEP_SUMMARY"
-            fi
+          if [ -f coverage-summary.md ]; then
+            cat coverage-summary.md >> "$GITHUB_STEP_SUMMARY"
+          elif [ -f .coverage ]; then
+            python -m coverage report --format=markdown --skip-covered >> "$GITHUB_STEP_SUMMARY" 2>&1 || echo "_Ошибка \`coverage report\`._" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "_Нет файла \`.coverage\` — pytest не записал данные покрытия._" >> "$GITHUB_STEP_SUMMARY"
+            echo "_Нет \`coverage-summary.md\` и \`.coverage\` — pytest не сгенерировал отчёт покрытия._" >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "---" >> "$GITHUB_STEP_SUMMARY"
           echo "## Тесты (JUnit)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Отдельный check **Test Results** не внутри этого блока: он вешается на коммит. Открой: [Checks для этого коммита]($COMMIT_CHECKS_URL) и найди **Test Results** в списке." >> "$GITHUB_STEP_SUMMARY"
-          echo "- Или открой [эту страницу run]($RUN_URL) → слева список jobs / проверок для коммита." >> "$GITHUB_STEP_SUMMARY"
-          echo "- Сырые XML: артефакты **junit** и **coverage-xml**." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Check **Test Results**: [все checks коммита]($COMMIT_CHECKS_URL)." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Этот workflow run: [$RUN_URL]($RUN_URL)." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Артефакты: **junit**, **coverage-xml**." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test report (JUnit)
         if: always()
