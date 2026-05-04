@@ -1,4 +1,4 @@
-"""Генерация машинных слов из AST (литералы, арифметика, setq, if, eq/=)."""
+"""Генерация машинных слов из AST (литералы, арифметика, setq, if, eq/=, progn)."""
 
 from __future__ import annotations
 
@@ -104,6 +104,19 @@ def _emit(e: Expr, slots: dict[str, int], pc0: int) -> list[int]:
             head, *args = items
             if not isinstance(head, Symbol):
                 raise CodegenError("Вызов: голова списка должна быть символом")
+            if head.name == "progn":
+                if not args:
+                    raise CodegenError("progn требует хотя бы одно выражение")
+                parts: list[int] = []
+                cur = pc0
+                for i, ex in enumerate(args):
+                    segment = _emit(ex, slots, cur)
+                    parts.extend(segment)
+                    cur = pc0 + len(parts)
+                    if i < len(args) - 1:
+                        parts.append(pack_word(Opcode.DROP, 0))
+                        cur = pc0 + len(parts)
+                return parts
             if head.name == "setq":
                 if len(args) != 2:
                     raise CodegenError("setq ожидает ровно два аргумента (имя и выражение)")
