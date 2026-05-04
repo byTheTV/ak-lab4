@@ -50,3 +50,10 @@ def test_defun_forward_call() -> None:
 def test_defun_forward_call_with_param() -> None:
     cpu = _run_module("(defun f (x) (g x))(defun g (y) (+ y 1))(f 4)")
     assert cpu.dm[STACK_BASE] == 5
+
+
+def test_defun_body_implicit_progn() -> None:
+    """Несколько форм в теле defun — как progn: побочные эффекты, значение — последняя форма."""
+    src = "(defun f (x) (setq acc (+ acc x)) (+ acc 10))(setq acc 0)(f 3)"
+    cpu = _run_module(src)
+    assert cpu.dm[STACK_BASE] == 13

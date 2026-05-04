@@ -1,4 +1,4 @@
-"""Генерация машинных слов: arith, setq, if, eq, progn, defun с параметрами, CALL."""
+"""Генерация машинных слов: arith, setq, if, eq, progn, defun (несколько форм тела), CALL."""
 
 from __future__ import annotations
 
@@ -39,7 +39,8 @@ def _collect_bindings(
         match ex:
             case SList(items):
                 if len(items) >= 4 and isinstance(items[0], Symbol) and items[0].name == "defun":
-                    walk(items[3])
+                    for b in items[3:]:
+                        walk(b)
                 if (
                     len(items) >= 3
                     and isinstance(items[0], Symbol)
@@ -101,9 +102,11 @@ def _is_defun_form(e: Expr) -> bool:
 
 
 def _parse_defun_full(d: SList) -> tuple[str, tuple[str, ...], Expr]:
-    if len(d.items) != 4:
-        raise CodegenError("defun: ожидается (defun имя (параметры ...) одно_тело)")
-    _kw, name_el, params_el, body = d.items
+    if len(d.items) < 4:
+        raise CodegenError(
+            "defun: ожидается (defun имя (параметры ...) выражение [выражение ...])",
+        )
+    _kw, name_el, params_el, *body_forms = d.items
     if not isinstance(name_el, Symbol):
         raise CodegenError("defun: имя функции должно быть символом")
     if not isinstance(params_el, SList):
@@ -115,6 +118,10 @@ def _parse_defun_full(d: SList) -> tuple[str, tuple[str, ...], Expr]:
         params.append(item.name)
     if len(set(params)) != len(params):
         raise CodegenError("defun: имена параметров должны быть различны")
+    if len(body_forms) == 1:
+        body: Expr = body_forms[0]
+    else:
+        body = SList((Symbol("progn"),) + tuple(body_forms))
     return name_el.name, tuple(params), body
 
 
