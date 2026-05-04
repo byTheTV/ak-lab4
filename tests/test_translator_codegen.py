@@ -44,6 +44,17 @@ def test_nested_add() -> None:
     assert _ops(w).count(int(Opcode.ADD)) == 2
 
 
+def test_compile_sub_mul_div_mod() -> None:
+    assert _ops(compile_program(parse("(- 10 3)")))[:3] == [
+        int(Opcode.PUSH_IMM),
+        int(Opcode.PUSH_IMM),
+        int(Opcode.SUB),
+    ]
+    assert _ops(compile_program(parse("(* 2 3)")))[:3][2] == int(Opcode.MUL)
+    assert _ops(compile_program(parse("(/ 6 2)")))[:3][2] == int(Opcode.DIV)
+    assert _ops(compile_program(parse("(mod 7 3)")))[:3][2] == int(Opcode.MOD)
+
+
 def test_imm24_out_of_range() -> None:
     with pytest.raises(CodegenError):
         compile_program(parse(str(IMM24_MAX + 1)))

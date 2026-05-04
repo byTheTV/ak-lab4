@@ -1,4 +1,4 @@
-"""Генерация машинных слов из AST (подмножество: целые, n-арный +)."""
+"""Генерация машинных слов из AST (подмножество: литералы, n-арная арифметика)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,14 @@ from ak_lab4.translator.ast import Expr, IntLit, SList, StrLit, Symbol
 # 24-бит signed immediate в push_imm
 IMM24_MIN: int = -(2**23)
 IMM24_MAX: int = 2**23 - 1
+
+_ARITH: dict[str, Opcode] = {
+    "+": Opcode.ADD,
+    "-": Opcode.SUB,
+    "*": Opcode.MUL,
+    "/": Opcode.DIV,
+    "mod": Opcode.MOD,
+}
 
 
 class CodegenError(ValueError):
@@ -19,6 +27,19 @@ def _check_imm24(v: int) -> int:
         msg = f"Литерал {v} вне диапазона 24-бит signed ({IMM24_MIN}…{IMM24_MAX})"
         raise CodegenError(msg)
     return v
+
+
+def _emit_n_ary(op: Opcode, args: tuple[Expr, ...], name: str) -> list[int]:
+    if len(args) < 2:
+        raise CodegenError(f"{name} требует минимум два аргумента")
+    words: list[int] = []
+    words.extend(_emit(args[0]))
+    words.extend(_emit(args[1]))
+    words.append(pack_word(op, 0))
+    for extra in args[2:]:
+        words.extend(_emit(extra))
+        words.append(pack_word(op, 0))
+    return words
 
 
 def _emit(e: Expr) -> list[int]:
@@ -37,17 +58,9 @@ def _emit(e: Expr) -> list[int]:
             head, *args = items
             if not isinstance(head, Symbol):
                 raise CodegenError("Вызов: голова списка должна быть символом")
-            if head.name == "+":
-                if len(args) < 2:
-                    raise CodegenError("+ требует минимум два аргумента")
-                words: list[int] = []
-                words.extend(_emit(args[0]))
-                words.extend(_emit(args[1]))
-                words.append(pack_word(Opcode.ADD, 0))
-                for extra in args[2:]:
-                    words.extend(_emit(extra))
-                    words.append(pack_word(Opcode.ADD, 0))
-                return words
+            op = _ARITH.get(head.name)
+            if op is not None:
+                return _emit_n_ary(op, tuple(args), head.name)
             raise CodegenError(f"Неизвестная форма: ({head.name} …)")
 
 
