@@ -64,6 +64,10 @@ jobs:
   pytest:
     name: pytest
     runs-on: ubuntu-latest
+    # Чтобы публикация JUnit создавала check «Test Results» на странице workflow
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v4
 
@@ -85,6 +89,24 @@ jobs:
             -v -ra --tb=short \
             --junitxml=junit.xml -o junit_family=xunit2 \
             --cov=ak_lab4 --cov-report=xml --cov-report=term-missing:skip-covered
+
+      # Отчёт в интерфейсе GitHub: вкладка run → слева check «Test Results» (не только ZIP)
+      - name: Publish test results (JUnit → GitHub Checks)
+        if: always() && hashFiles('junit.xml') != ''
+        continue-on-error: true
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: junit.xml
+          check_name: Test Results
+          comment_mode: off
+
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## Тесты и покрытие" >> "$GITHUB_STEP_SUMMARY"
+          echo "- В этом же run открой check **Test Results** — таблица тестов pass/fail." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Подробный лог pytest (в т.ч. coverage в консоли) — шаг **Pytest** выше." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Сырые XML: артефакты **junit** и **coverage-xml**." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test report (JUnit)
         if: always()
