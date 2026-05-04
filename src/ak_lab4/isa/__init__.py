@@ -18,6 +18,7 @@ class Opcode(IntEnum):
     DROP = 0x03
     LOAD = 0x04
     STORE = 0x05
+    SWAP = 0x06
     ADD = 0x10
     SUB = 0x11
     MUL = 0x12

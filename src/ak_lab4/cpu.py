@@ -22,6 +22,7 @@ _TICKS: dict[int, int] = {
     int(Opcode.DROP): 2,
     int(Opcode.LOAD): 4,
     int(Opcode.STORE): 4,
+    int(Opcode.SWAP): 2,
     int(Opcode.ADD): 3,
     int(Opcode.SUB): 3,
     int(Opcode.MUL): 5,
@@ -129,6 +130,12 @@ class Cpu:
                 addr = self._pop()
                 a = self._ensure_dm_addr(addr)
                 self.dm[a] = val & 0xFFFFFFFF
+                self.pc = next_pc
+            case x if x == Opcode.SWAP:
+                top = self._pop()
+                below = self._pop()
+                self._push(top)
+                self._push(below)
                 self.pc = next_pc
             case x if x == Opcode.ADD:
                 x1 = self._pop()
