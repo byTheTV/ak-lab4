@@ -51,3 +51,11 @@ def unpack_word(word: int) -> tuple[int, int]:
     """Вернуть (op, operand) из 32-бит слова."""
     w = word & 0xFFFFFFFF
     return (w >> OPCODE_SHIFT) & 0xFF, w & OPERAND_MASK
+
+
+def sign_extend_operand_i(operand: int) -> int:
+    """Формат I: 24-битное знаковое поле → 32-бит int."""
+    o = operand & OPERAND_MASK
+    if o & 0x800000:
+        return o - 0x1000000
+    return o
