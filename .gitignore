@@ -25,6 +25,9 @@ build/
 .ruff_cache/
 .pytest_cache/
 .coverage
+coverage.xml
+coverage-summary.md
+junit.xml
 htmlcov/
 .idea/
 .vscode/

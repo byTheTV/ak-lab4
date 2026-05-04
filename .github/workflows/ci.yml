@@ -64,6 +64,10 @@ jobs:
   pytest:
     name: pytest
     runs-on: ubuntu-latest
+    # Чтобы публикация JUnit создавала check «Test Results» на странице workflow
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v4
 
@@ -80,4 +84,61 @@ jobs:
           python -m pip install -e ".[dev]"
 
       - name: Pytest
-        run: python -m pytest
+        run: |
+          python -m pytest \
+            -v -ra --tb=short \
+            --junitxml=junit.xml -o junit_family=xunit2 \
+            --cov=ak_lab4 \
+            --cov-report=xml \
+            --cov-report=term-missing:skip-covered \
+            --cov-report=markdown:coverage-summary.md
+
+      # Отчёт в интерфейсе GitHub: вкладка run → слева check «Test Results» (не только ZIP)
+      - name: Publish test results (JUnit → GitHub Checks)
+        if: always() && hashFiles('junit.xml') != ''
+        continue-on-error: true
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: junit.xml
+          check_name: Test Results
+          comment_mode: off
+
+      # Summary виден на странице job «pytest» (внизу), не в check «Test Results» (там только JUnit).
+      - name: Job summary (покрытие + ссылки)
+        if: always()
+        env:
+          COMMIT_CHECKS_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}/checks
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          echo "## Покрытие кода" >> "$GITHUB_STEP_SUMMARY"
+          echo "> **Где смотреть:** открой job **pytest** (не «Test Results») → прокрути вниз до блока **Summary**. В левой колонке **Test Results** — только список тестов из JUnit, без coverage." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f coverage-summary.md ]; then
+            cat coverage-summary.md >> "$GITHUB_STEP_SUMMARY"
+          elif [ -f .coverage ]; then
+            python -m coverage report --format=markdown --skip-covered >> "$GITHUB_STEP_SUMMARY" 2>&1 || echo "_Ошибка \`coverage report\`._" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_Нет \`coverage-summary.md\` и \`.coverage\` — pytest не сгенерировал отчёт покрытия._" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Тесты (JUnit)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Check **Test Results**: [все checks коммита]($COMMIT_CHECKS_URL)." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Этот workflow run: [$RUN_URL]($RUN_URL)." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Артефакты: **junit**, **coverage-xml**." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test report (JUnit)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit
+          path: junit.xml
+          if-no-files-found: ignore
+
+      - name: Upload coverage (Cobertura XML)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore
