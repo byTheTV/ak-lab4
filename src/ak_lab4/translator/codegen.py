@@ -172,3 +172,14 @@ def compile_program(expr: Expr) -> list[int]:
     """Одно выражение-программа: код и завершающий HALT."""
     slots = _collect_global_slots(expr)
     return _emit(expr, slots, 0) + [pack_word(Opcode.HALT, 0)]
+
+
+def compile_forms(forms: tuple[Expr, ...]) -> list[int]:
+    """Несколько верхнеуровневых форм — как последовательный progn (значение у последней)."""
+    if not forms:
+        raise CodegenError("Нет форм для компиляции")
+    if len(forms) == 1:
+        return compile_program(forms[0])
+    wrapped = SList((Symbol("progn"),) + tuple(forms))
+    slots = _collect_global_slots(wrapped)
+    return _emit(wrapped, slots, 0) + [pack_word(Opcode.HALT, 0)]

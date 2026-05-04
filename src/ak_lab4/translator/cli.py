@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from ak_lab4.loader import write_words_le
-from ak_lab4.translator import CodegenError, LexError, ParseError, compile_program, parse_many
+from ak_lab4.translator import CodegenError, LexError, ParseError, compile_forms, parse_many
 
 
 def write_listing(path: Path, words: list[int]) -> None:
@@ -18,7 +18,7 @@ def write_listing(path: Path, words: list[int]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        description="Транслятор Lisp → code.bin (одна верхнеуровневая форма)."
+        description="Транслятор Lisp → code.bin; несколько форм = как progn.",
     )
     p.add_argument("input", type=Path, help="Исходный .lisp")
     p.add_argument(
@@ -59,15 +59,9 @@ def main(argv: list[str] | None = None) -> int:
     if len(forms) == 0:
         print("Ошибка: пустой или только пробельный вход", file=sys.stderr)
         return 1
-    if len(forms) != 1:
-        print(
-            f"Ошибка: ожидается ровно одна верхнеуровневая форма, получено {len(forms)}",
-            file=sys.stderr,
-        )
-        return 1
 
     try:
-        words = compile_program(forms[0])
+        words = compile_forms(forms)
     except CodegenError as e:
         print(str(e), file=sys.stderr)
         return 1
