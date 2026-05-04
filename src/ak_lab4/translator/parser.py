@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ak_lab4.translator.ast import Expr, IntLit, SList, StrLit, Symbol
-from ak_lab4.translator.lexer import SourceLoc, TokKind, Token, tokenize
+from ak_lab4.translator.lexer import SourceLoc, Token, TokKind, tokenize
 
 
 class ParseError(ValueError):

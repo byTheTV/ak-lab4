@@ -24,7 +24,7 @@ class Symbol:
 class SList:
     """Вызов / специальная форма / вложенный список."""
 
-    items: tuple["Expr", ...]
+    items: tuple[Expr, ...]
 
 
 Expr = IntLit | StrLit | Symbol | SList

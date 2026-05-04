@@ -96,11 +96,7 @@ def tokenize(source: str) -> list[Token]:
             continue
 
         # число: [0-9]+ или явный знак +/-
-        if c.isdigit() or (
-            c in "+-"
-            and i + 1 < n
-            and source[i + 1].isdigit()
-        ):
+        if c.isdigit() or (c in "+-" and i + 1 < n and source[i + 1].isdigit()):
             sign = 1
             j = i
             if c in "+-":
@@ -121,7 +117,7 @@ def tokenize(source: str) -> list[Token]:
 
         # символ: до разделителя
         j = i
-        while j < n and source[j] not in " \t\r\n();\"":
+        while j < n and source[j] not in ' \t\r\n();"':
             j += 1
         sym = source[i:j]
         if not sym:
