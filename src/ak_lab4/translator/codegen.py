@@ -1,4 +1,4 @@
-"""Генерация машинных слов из AST (литералы, арифметика, setq, if)."""
+"""Генерация машинных слов из AST (литералы, арифметика, setq, if, eq/=)."""
 
 from __future__ import annotations
 
@@ -143,6 +143,12 @@ def _emit(e: Expr, slots: dict[str, int], pc0: int) -> list[int]:
                     + [pack_word(Opcode.JMP, end_pc)]
                     + else_c
                 )
+            if head.name in ("eq", "="):
+                if len(args) != 2:
+                    raise CodegenError("eq и = ожидают ровно два аргумента")
+                left = _emit(args[0], slots, pc0)
+                right = _emit(args[1], slots, pc0 + len(left))
+                return left + right + [pack_word(Opcode.EQ, 0)]
             op = _ARITH.get(head.name)
             if op is not None:
                 return _emit_n_ary(op, tuple(args), head.name, slots, pc0)
