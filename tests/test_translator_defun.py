@@ -29,3 +29,13 @@ def test_swap_ret_preserves_result_under_return_pc() -> None:
     """После CALL стек [ret]; тело кладёт значение → SWAP → RET оставляет значение на стеке."""
     cpu = _run_module("(defun x () (+ 9 9))(x)")
     assert cpu.dm[STACK_BASE] == 18
+
+
+def test_defun_one_param() -> None:
+    cpu = _run_module("(defun inc (x) (+ x 1))(inc 5)")
+    assert cpu.dm[STACK_BASE] == 6
+
+
+def test_defun_two_params() -> None:
+    cpu = _run_module("(defun add (a b) (+ a b))(add 10 20)")
+    assert cpu.dm[STACK_BASE] == 30
