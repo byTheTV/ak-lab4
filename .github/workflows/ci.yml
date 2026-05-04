@@ -100,24 +100,32 @@ jobs:
           check_name: Test Results
           comment_mode: off
 
-      - name: Job summary (coverage + подсказки)
+      - name: Job summary (покрытие + ссылки на checks)
         if: always()
+        env:
+          COMMIT_CHECKS_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}/checks
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          {
-            echo "## Покрытие кода"
-            echo "Таблица из \`coverage.py\` по результатам шага **Pytest**."
-            echo ""
-            if [ -f .coverage ]; then
-              python -m coverage report --format=markdown --skip-covered || echo "_Не удалось вывести coverage report._"
-            else
-              echo "_Нет \`.coverage\` — pytest не записал данные._"
+          set +e
+          echo "## Покрытие кода" >> "$GITHUB_STEP_SUMMARY"
+          echo "Таблица из \`coverage.py\` после шага **Pytest** (без скачивания артефакта)." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f .coverage ]; then
+            python -m coverage report --format=markdown --skip-covered >> "$GITHUB_STEP_SUMMARY" 2>&1
+            cov_st=$?
+            if [ "$cov_st" != 0 ]; then
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "_Не удалось вывести \`coverage report\` (код $cov_st)._ " >> "$GITHUB_STEP_SUMMARY"
             fi
-            echo ""
-            echo "---"
-            echo "## Тесты"
-            echo "- run: check **Test Results** (JUnit)."
-            echo "- Сырые XML: **junit**, **coverage-xml**."
-          } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_Нет файла \`.coverage\` — pytest не записал данные покрытия._" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Тесты (JUnit)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Отдельный check **Test Results** не внутри этого блока: он вешается на коммит. Открой: [Checks для этого коммита]($COMMIT_CHECKS_URL) и найди **Test Results** в списке." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Или открой [эту страницу run]($RUN_URL) → слева список jobs / проверок для коммита." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Сырые XML: артефакты **junit** и **coverage-xml**." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test report (JUnit)
         if: always()
