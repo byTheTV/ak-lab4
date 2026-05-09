@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from collections import deque
 
 from ak_lab4.cpu import Cpu, init_memory_from_segments, run_program
 from ak_lab4.io_schedule import IrqScheduleEvent, load_irq_schedule_json
@@ -44,9 +43,9 @@ def test_schedule_tick_after_some_instructions(tmp_path) -> None:
         pack_word(Opcode.IN, int(Port.DATA_IN)),
         pack_word(Opcode.HALT, 0),
     ]
-    # NOP = 1 tick, затем на суммарном такте 2 должно прийти значение перед началом шага с ticks>=2
+    # NOP = 1 такт; после NOP ticks=1; перед IN нужно событие с tick<=1
+    sched = (IrqScheduleEvent(1, 0, 99),)
     im, dm = init_memory_from_segments(words, [])
-    sched = (IrqScheduleEvent(2, 0, 99),)
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
     run_program(cpu, max_ticks=50_000)
     assert cpu.halted

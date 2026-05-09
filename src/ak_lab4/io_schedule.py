@@ -16,6 +16,12 @@ class IrqScheduleEvent:
     value: int  # байт 0…255
 
 
+def _byte_from_json_value(v: object) -> int:
+    if isinstance(v, str):
+        return ord(v[0]) & 0xFF if v else 0
+    return int(v) & 0xFF
+
+
 def load_irq_schedule_json(path: Path) -> tuple[IrqScheduleEvent, ...]:
     """JSON-массив объектов ``{\"tick\": int, \"irq\": int, \"value\": …}``.
 
@@ -32,11 +38,7 @@ def load_irq_schedule_json(path: Path) -> tuple[IrqScheduleEvent, ...]:
             raise ValueError(msg)
         tick = int(o["tick"])
         irq = int(o["irq"])
-        v = o.get("value", 0)
-        if isinstance(v, str):
-            value = ord(v[0]) & 0xFF if v else 0
-        else:
-            value = int(v) & 0xFF
+        value = _byte_from_json_value(o.get("value", 0))
         out.append(IrqScheduleEvent(tick=tick, irq=irq, value=value))
     out.sort(key=lambda e: e.tick)
     return tuple(out)
