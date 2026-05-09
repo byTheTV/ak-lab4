@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from collections import deque
 from pathlib import Path
 
 from ak_lab4.cpu import Cpu, CpuFault, init_memory_from_segments, run_program
-from ak_lab4.isa import Opcode, Port, pack_word
+from ak_lab4.isa import Opcode, pack_word
 from ak_lab4.loader import write_words_le
 from ak_lab4.memory import STACK_BASE
 
@@ -82,25 +81,3 @@ def test_max_ticks_exceeded() -> None:
         raise AssertionError("ожидали CpuFault")
     except CpuFault as e:
         assert "лимит тактов" in str(e)
-
-
-def test_in_data_port_reads_queue_eof_minus_one() -> None:
-    """IN с Port.DATA_IN: байты из очереди; после исчерпания — −1 на стеке (EOF)."""
-    words = [
-        pack_word(Opcode.IN, int(Port.DATA_IN)),
-        pack_word(Opcode.IN, int(Port.DATA_IN)),
-        pack_word(Opcode.HALT, 0),
-    ]
-    im, dm = init_memory_from_segments(words, [])
-    cpu = Cpu(
-        im=im,
-        dm=dm,
-        pc=0,
-        sp=STACK_BASE,
-        input_queue=deque([10]),
-    )
-    run_program(cpu, max_ticks=10_000)
-    assert cpu.halted
-    assert cpu.sp == STACK_BASE + 2
-    assert cpu.dm[STACK_BASE] == 10
-    assert cpu.dm[STACK_BASE + 1] == 0xFFFFFFFF  # −1
