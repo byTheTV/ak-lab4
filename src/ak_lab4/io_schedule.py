@@ -19,7 +19,14 @@ class IrqScheduleEvent:
 def _byte_from_json_value(v: object) -> int:
     if isinstance(v, str):
         return ord(v[0]) & 0xFF if v else 0
-    return int(v) & 0xFF
+    if isinstance(v, bool):
+        return int(v) & 0xFF
+    if isinstance(v, int):
+        return v & 0xFF
+    if isinstance(v, float):
+        return int(v) & 0xFF
+    msg = f"Расписание: value ожидается str/int/float, получено {type(v).__name__}"
+    raise TypeError(msg)
 
 
 def load_irq_schedule_json(path: Path) -> tuple[IrqScheduleEvent, ...]:
