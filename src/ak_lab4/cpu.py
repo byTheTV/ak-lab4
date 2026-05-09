@@ -102,29 +102,6 @@ class Cpu:
             raise CpuFault(msg)
         return self._ensure_im_pc(opnd & OPERAND_MASK)
 
-    def _try_deliver_irq(self) -> None:
-        """Граница инструкции: принять один маскируемый запрос → переход по вектору (ТЗ: после завершения инструкции).
-
-        Пока выполняется ISR (depth > 0), новые запросы не принимаются — остаются в irq_pending
-        (вложенность по ТЗ обрабатывается явно).
-        """
-        if self.ticks == 0:
-            return
-        if not self.irq_enabled:
-            return
-        if self.interrupt_depth > 0:
-            return
-        for irq in range(NUM_IRQ_LINES):
-            if not self.irq_pending[irq]:
-                continue
-            ret_pc = self.pc
-            self._push(ret_pc & 0xFFFFFFFF)
-            self.pc = self._read_vector_target(irq)
-            self.interrupt_depth += 1
-            self._irq_delivered_byte = self.irq_line_value[irq] & 0xFF
-            self.irq_pending[irq] = False
-            return
-
     def _read_port_in(self, port: int) -> int:
         """Значение для IN по номеру порта."""
         if port == int(Port.DATA_IN):
@@ -184,7 +161,6 @@ class Cpu:
             return
 
         self._apply_irq_schedule_for_current_ticks()
-        self._try_deliver_irq()
 
         pc0 = self._ensure_im_pc(self.pc)
         word = self.im[pc0] & 0xFFFFFFFF
@@ -315,6 +291,27 @@ class Cpu:
                 raise CpuFault(msg)
 
         self._add_ticks(op)
+        if not self.halted:
+            self._try_deliver_irq_after_instruction()
+
+    def _try_deliver_irq_after_instruction(self) -> None:
+        """После завершения инструкции: один запрос → push адреса следующей инструкции, PC := обработчик."""
+        if self.ticks == 0:
+            return
+        if not self.irq_enabled:
+            return
+        if self.interrupt_depth > 0:
+            return
+        for irq in range(NUM_IRQ_LINES):
+            if not self.irq_pending[irq]:
+                continue
+            ret_pc = self.pc
+            self._push(ret_pc & 0xFFFFFFFF)
+            self.pc = self._read_vector_target(irq)
+            self.interrupt_depth += 1
+            self._irq_delivered_byte = self.irq_line_value[irq] & 0xFF
+            self.irq_pending[irq] = False
+            return
 
 
 def _signed32(u: int) -> int:

@@ -242,6 +242,14 @@ def _emit(
             head, *args = items
             if not isinstance(head, Symbol):
                 raise CodegenError("Вызов: голова списка должна быть символом")
+            if head.name == "drop":
+                if args:
+                    raise CodegenError("drop не принимает аргументов")
+                return [pack_word(Opcode.DROP, 0)]
+            if head.name == "nop":
+                if args:
+                    raise CodegenError("nop не принимает аргументов")
+                return [pack_word(Opcode.NOP, 0)]
             if head.name == "progn":
                 if not args:
                     raise CodegenError("progn требует хотя бы одно выражение")
@@ -516,6 +524,12 @@ def _compile_with_defuns_interrupts(
     irq_handlers: dict[int, Expr],
 ) -> list[int]:
     """Как _compile_with_defuns, но IM[0]=jmp main, IM[1..NUM_IRQ]=jmp handler; тела после HALT — RET."""
+
+    def _emit_isr(body: Expr, entry_pc: int, **kwargs: object) -> list[int]:
+        """Обработчик: выражение как тело процедуры; перед RET снимаем результат последней формы со стека."""
+        chunk = _emit(body, global_slots, entry_pc, **kwargs)  # type: ignore[arg-type]
+        return chunk + [pack_word(Opcode.DROP, 0)]
+
     irq_vals = tuple(irq_handlers.values())
     all_forms = tuple(defuns) + mains + irq_vals
     global_slots, param_slot_addr = _collect_bindings(all_forms)

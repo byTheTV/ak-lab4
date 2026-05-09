@@ -4,8 +4,8 @@ import json
 
 from ak_lab4.cpu import Cpu, init_memory_from_segments, run_program
 from ak_lab4.io_schedule import IrqScheduleEvent, load_irq_schedule_json
-from ak_lab4.isa import Opcode, Port, pack_word
 from ak_lab4.memory import STACK_BASE
+from ak_lab4.translator import compile_forms, parse_many
 
 
 def test_load_schedule_json(tmp_path) -> None:
@@ -21,14 +21,15 @@ def test_load_schedule_json(tmp_path) -> None:
     )
 
 
-def test_schedule_injects_byte_before_in_instruction(tmp_path) -> None:
-    """На такте 0 байт попадает в очередь до первого IN."""
-    words = [
-        pack_word(Opcode.IN, int(Port.DATA_IN)),
-        pack_word(Opcode.HALT, 0),
-    ]
-    im, dm = init_memory_from_segments(words, [])
+def test_irq_schedule_delivers_to_handler_via_in() -> None:
+    """Расписание выставляет запрос; данные читает обработчик (interrupt), не «магическая» очередь stdin."""
+    words = compile_forms(
+        parse_many(
+            "(nop)\n(interrupt 0 (in))\n",
+        ),
+    )
     sched = (IrqScheduleEvent(0, 0, 66),)
+    im, dm = init_memory_from_segments(words, [])
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
     run_program(cpu, max_ticks=50_000)
     assert cpu.halted
@@ -36,17 +37,29 @@ def test_schedule_injects_byte_before_in_instruction(tmp_path) -> None:
     assert cpu.irq_latches[0] == 66
 
 
-def test_schedule_tick_after_some_instructions(tmp_path) -> None:
-    """Событие на более позднем такте встаёт в очередь позже."""
-    words = [
-        pack_word(Opcode.NOP, 0),
-        pack_word(Opcode.IN, int(Port.DATA_IN)),
-        pack_word(Opcode.HALT, 0),
-    ]
-    # NOP = 1 такт; после NOP ticks=1; перед IN нужно событие с tick<=1
-    sched = (IrqScheduleEvent(1, 0, 99),)
+def test_irq_tick_after_nop_before_halt() -> None:
+    """Событие на такте 3 — после JMP (2 т.) и NOP (1 т.), обработчик до встроенного HALT."""
+    words = compile_forms(
+        parse_many(
+            "(nop)\n(interrupt 0 (in))\n",
+        ),
+    )
+    sched = (IrqScheduleEvent(3, 0, 99),)
     im, dm = init_memory_from_segments(words, [])
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
     run_program(cpu, max_ticks=50_000)
     assert cpu.halted
     assert cpu.dm[STACK_BASE] == 99
+
+
+def test_log_prefix_isr(tmp_path) -> None:
+    """Журнал помечает режим USR/ISR (см. ТЗ: видно, в прерывании выполнение или нет)."""
+    words = compile_forms(parse_many("(nop)\n(interrupt 0 (nop))\n"))
+    im, dm = init_memory_from_segments(words, [])
+    cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=(IrqScheduleEvent(1, 0, 0),))
+    log = tmp_path / "x.log"
+    with log.open("w", encoding="utf-8") as f:
+        run_program(cpu, max_ticks=10000, log=f)
+    text = log.read_text(encoding="utf-8")
+    assert "\tISR\n" in text
+    assert "\tUSR\n" in text
