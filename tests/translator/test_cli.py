@@ -41,3 +41,12 @@ def test_cli_listing_and_data_out(tmp_path: Path) -> None:
     lines = [ln for ln in lst.read_text(encoding="utf-8").splitlines() if ln.strip()]
     assert len(lines) == len(load_words_le(code))
     assert load_words_le(code) == compile_program(parse("42"))
+
+
+def test_cli_compiles_out_form(tmp_path: Path) -> None:
+    src = tmp_path / "io.lisp"
+    src.write_text("(out (+ 1 2))\n", encoding="utf-8")
+    out = tmp_path / "code.bin"
+    rc = translator_main([str(src), "-o", str(out)])
+    assert rc == 0
+    assert load_words_le(out) == compile_program(parse("(out (+ 1 2))"))

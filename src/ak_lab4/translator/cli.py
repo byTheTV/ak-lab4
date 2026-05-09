@@ -9,6 +9,15 @@ from pathlib import Path
 from ak_lab4.loader import write_words_le
 from ak_lab4.translator import CodegenError, LexError, ParseError, compile_forms, parse_many
 
+_CLI_EPILOG = """\
+Пример цепочки:
+  python -m ak_lab4.translator p.lisp -o code.bin --data-out data.bin
+  python -m ak_lab4.simulator code.bin data.bin
+Если в программе есть (in), передайте байты для порта DATA_IN:
+  python -m ak_lab4.simulator code.bin data.bin --input вход.bin
+  python -m ak_lab4.simulator code.bin data.bin --input -
+"""
+
 
 def write_listing(path: Path, words: list[int]) -> None:
     """Текстовый листинг: `<addr> - <HEX8>` по строке на слово."""
@@ -18,7 +27,9 @@ def write_listing(path: Path, words: list[int]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        description="Транслятор Lisp → code.bin; несколько форм = как progn.",
+        description="Транслятор Lisp - code.bin; несколько форм = как progn.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_CLI_EPILOG,
     )
     p.add_argument("input", type=Path, help="Исходный .lisp")
     p.add_argument(

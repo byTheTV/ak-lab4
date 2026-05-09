@@ -11,6 +11,12 @@ from ak_lab4.loader import load_words_le
 from ak_lab4.memory import STACK_BASE
 
 
+def apply_input_to_cpu(cpu: Cpu, spec: str) -> None:
+    """Заполнить ``cpu.input_queue`` байтами из файла или из stdin (спецификатор «-»)."""
+    raw = sys.stdin.buffer.read() if spec == "-" else Path(spec).read_bytes()
+    cpu.input_queue.extend(raw)
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Симулятор Гарвард v0 (code.bin + data.bin).")
     p.add_argument("code", type=Path, help="Путь к code.bin")
@@ -22,6 +28,12 @@ def main(argv: list[str] | None = None) -> int:
         default=10_000_000,
         metavar="N",
         help="Лимит суммарных тактов (по умолчанию 10^7)",
+    )
+    p.add_argument(
+        "--input",
+        metavar="PATH|-",
+        default=None,
+        help="Байты в очередь чтения порта DATA_IN (файл или «-» = весь stdin)",
     )
     args = p.parse_args(argv)
 
@@ -37,6 +49,13 @@ def main(argv: list[str] | None = None) -> int:
 
     im, dm = init_memory_from_segments(code_words, data_words)
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE)
+
+    if args.input is not None:
+        try:
+            apply_input_to_cpu(cpu, args.input)
+        except OSError as e:
+            print(f"Ошибка чтения --input: {e}", file=sys.stderr)
+            return 2
 
     log_file = None
     try:
