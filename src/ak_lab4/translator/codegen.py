@@ -1,8 +1,8 @@
-"""Генерация машинных слов: arith, setq, if, eq, progn, defun (несколько форм тела), CALL."""
+"""Генерация машинных слов: arith, setq, if, eq, progn, in/out, defun, CALL."""
 
 from __future__ import annotations
 
-from ak_lab4.isa import Opcode, pack_word
+from ak_lab4.isa import Opcode, Port, pack_word
 from ak_lab4.translator.ast import Expr, IntLit, SList, StrLit, Symbol
 
 IMM24_MIN: int = -(2**23)
@@ -218,6 +218,26 @@ def _emit(
                         parts.append(pack_word(Opcode.DROP, 0))
                         cur = pc0 + len(parts)
                 return parts
+            if head.name == "in":
+                if args:
+                    raise CodegenError("in не принимает аргументов")
+                return [pack_word(Opcode.IN, int(Port.DATA_IN))]
+            if head.name == "out":
+                if len(args) != 1:
+                    raise CodegenError("out ожидает ровно один аргумент (значение для порта)")
+                val_c = _emit(
+                    args[0],
+                    global_slots,
+                    pc0,
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                )
+                return val_c + [
+                    pack_word(Opcode.DUP, 0),
+                    pack_word(Opcode.OUT, int(Port.DATA_OUT)),
+                ]
             if head.name == "setq":
                 if len(args) != 2:
                     raise CodegenError("setq ожидает ровно два аргумента (имя и выражение)")
