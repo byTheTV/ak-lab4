@@ -22,7 +22,7 @@ def test_load_schedule_json(tmp_path) -> None:
 
 
 def test_irq_schedule_delivers_to_handler_via_in() -> None:
-    """Расписание выставляет запрос; данные читает обработчик (interrupt), не «магическая» очередь stdin."""
+    """Расписание и обработчик (interrupt); байты не из stdin-очереди."""
     words = compile_forms(
         parse_many(
             "(nop)\n(interrupt 0 (in))\n",

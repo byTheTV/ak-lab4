@@ -69,7 +69,7 @@ class Cpu:
     _schedule_i: int = field(default=0, repr=False)
     # Последнее значение на линии irq (после события расписания); для отладки/отчёта.
     irq_latches: dict[int, int] = field(default_factory=dict)
-    # Линии запроса: событие расписания выставляет pending и байт на линии (ТЗ: не смешивать с «магическим stdin»).
+    # Линии запроса: расписание ставит pending и байт на линии (не смешивать со stdin).
     irq_pending: list[bool] = field(default_factory=lambda: [False] * NUM_IRQ_LINES)
     irq_line_value: list[int] = field(default_factory=lambda: [0] * NUM_IRQ_LINES)
     irq_enabled: bool = True
@@ -295,7 +295,7 @@ class Cpu:
             self._try_deliver_irq_after_instruction()
 
     def _try_deliver_irq_after_instruction(self) -> None:
-        """После завершения инструкции: один запрос → push адреса следующей инструкции, PC := обработчик."""
+        """После инструкции: один запрос → push адреса следующей команды, PC := обработчик."""
         if self.ticks == 0:
             return
         if not self.irq_enabled:

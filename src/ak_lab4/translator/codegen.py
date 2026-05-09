@@ -519,7 +519,7 @@ def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> 
 
 
 def _handler_needs_drop_before_ret(body: Expr) -> bool:
-    """Последняя форма тела ISR даёт значение на стеке — снять перед RET (иначе RET снимет её как адрес)."""
+    """ISR: последняя форма оставила значение на стеке — нужен DROP перед RET."""
 
     def last_form(ex: Expr) -> Expr:
         if isinstance(ex, SList) and ex.items:
@@ -551,7 +551,7 @@ def _compile_with_defuns_interrupts(
     mains: tuple[Expr, ...],
     irq_handlers: dict[int, Expr],
 ) -> list[int]:
-    """Как _compile_with_defuns, но IM[0]=jmp main, IM[1..NUM_IRQ]=jmp handler; тела после HALT — RET."""
+    """_compile_with_defuns + векторы IM[1..N]=jmp handler; после HALT — обработчики и RET."""
     irq_vals = tuple(irq_handlers.values())
     all_forms = tuple(defuns) + mains + irq_vals
     global_slots, param_slot_addr = _collect_bindings(all_forms)
@@ -679,7 +679,9 @@ def _compile_mains_interrupts(
         hbody = irq_handlers[irq]
         extra = [pack_word(Opcode.DROP, 0)] if _handler_needs_drop_before_ret(hbody) else []
         words.extend(
-            _emit(hbody, global_slots, entry, None, None, None, None) + extra + [pack_word(Opcode.RET, 0)]
+            _emit(hbody, global_slots, entry, None, None, None, None)
+            + extra
+            + [pack_word(Opcode.RET, 0)]
         )
     for irq, tgt in handler_pc.items():
         words[1 + irq] = pack_word(Opcode.JMP, tgt)
