@@ -7,6 +7,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import TextIO
 
+from ak_lab4.io_schedule import IrqScheduleEvent
 from ak_lab4.isa import OPERAND_MASK, Opcode, Port, sign_extend_operand_i, unpack_word
 from ak_lab4.memory import DM_SIZE_WORDS, IM_SIZE_WORDS, STACK_BASE
 
@@ -54,6 +55,20 @@ class Cpu:
     input_queue: deque[int] = field(default_factory=deque)
     # Вывод порта DATA_OUT — накапливаем байты (младший октет слова).
     out_bytes: list[int] = field(default_factory=list)
+    # Расписание trap (прерываний по такту): см. io_schedule.load_irq_schedule_json
+    irq_schedule: tuple[IrqScheduleEvent, ...] = field(default_factory=tuple)
+    _schedule_i: int = field(default=0, repr=False)
+    irq_latches: dict[int, int] = field(default_factory=dict)
+
+    def _apply_irq_schedule_for_current_ticks(self) -> None:
+        """Доставить все события с tick <= текущего суммарного такта."""
+        while self._schedule_i < len(self.irq_schedule):
+            ev = self.irq_schedule[self._schedule_i]
+            if ev.tick > self.ticks:
+                break
+            self.irq_latches[ev.irq] = ev.value & 0xFF
+            self.input_queue.append(ev.value & 0xFF)
+            self._schedule_i += 1
 
     def _read_port_in(self, port: int) -> int:
         """Значение для IN: для DATA_IN — следующий байт или −1 (EOF); иначе 0."""
@@ -107,6 +122,8 @@ class Cpu:
         if self.halted:
             return
 
+        self._apply_irq_schedule_for_current_ticks()
+
         pc0 = self._ensure_im_pc(self.pc)
         word = self.im[pc0] & 0xFFFFFFFF
         op_byte, operand = unpack_word(word)
@@ -116,7 +133,6 @@ class Cpu:
             log.write(f"{self.ticks}\t{pc0}\t{word:08X}\n")
 
         op = op_byte
-        self._add_ticks(op)
 
         match op:
             case x if x == Opcode.NOP:
@@ -222,6 +238,8 @@ class Cpu:
             case _:
                 msg = f"Неизвестный опкод: 0x{op_byte:02X} в PC={pc0}, слово={word:08X}"
                 raise CpuFault(msg)
+
+        self._add_ticks(op)
 
 
 def _signed32(u: int) -> int:

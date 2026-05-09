@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 from ak_lab4.cpu import Cpu, CpuFault, init_memory_from_segments, run_program
+from ak_lab4.io_schedule import load_irq_schedule_json
 from ak_lab4.loader import load_words_le
 from ak_lab4.memory import STACK_BASE
 
@@ -35,6 +37,13 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Байты в очередь чтения порта DATA_IN (файл или «-» = весь stdin)",
     )
+    p.add_argument(
+        "--schedule",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="JSON: события [{tick, irq, value}] — trap по суммарным тактам → очередь ввода",
+    )
     args = p.parse_args(argv)
 
     try:
@@ -48,7 +57,16 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     im, dm = init_memory_from_segments(code_words, data_words)
-    cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE)
+
+    irq_sched = ()
+    if args.schedule is not None:
+        try:
+            irq_sched = load_irq_schedule_json(args.schedule)
+        except (OSError, ValueError, KeyError, json.JSONDecodeError) as e:
+            print(f"Ошибка --schedule: {e}", file=sys.stderr)
+            return 2
+
+    cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=irq_sched)
 
     if args.input is not None:
         try:

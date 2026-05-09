@@ -5,6 +5,7 @@ from collections import deque
 import pytest
 
 from ak_lab4.cpu import Cpu, init_memory_from_segments, run_program
+from ak_lab4.isa import Opcode, Port, unpack_word
 from ak_lab4.memory import STACK_BASE
 from ak_lab4.translator import compile_forms, parse, parse_many
 from ak_lab4.translator.codegen import CodegenError, compile_program
@@ -56,3 +57,19 @@ def test_in_requires_zero_args() -> None:
 def test_out_requires_one_arg() -> None:
     with pytest.raises(CodegenError, match="out ожидает"):
         compile_program(parse("(out)"))
+
+
+def test_in_generates_in_data_port() -> None:
+    w = compile_program(parse("(in)"))
+    op, imm = unpack_word(w[0])
+    assert op == int(Opcode.IN)
+    assert imm == int(Port.DATA_IN)
+
+
+def test_out_generates_dup_and_out() -> None:
+    w = compile_program(parse("(out 9)"))
+    assert unpack_word(w[0])[0] == int(Opcode.PUSH_IMM)
+    assert unpack_word(w[1])[0] == int(Opcode.DUP)
+    op, imm = unpack_word(w[2])
+    assert op == int(Opcode.OUT)
+    assert imm == int(Port.DATA_OUT)

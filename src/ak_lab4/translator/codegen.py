@@ -1,4 +1,4 @@
-"""Генерация машинных слов: arith, setq, if, eq, progn, in/out, defun, CALL."""
+"""Генерация машинных слов: arith, setq, if, eq, progn, in/out (порты), defun, CALL."""
 
 from __future__ import annotations
 
