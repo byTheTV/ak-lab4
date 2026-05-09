@@ -8,7 +8,8 @@ import pytest
 from ak_lab4.cpu import Cpu
 from ak_lab4.isa import Opcode, Port, pack_word
 from ak_lab4.loader import write_words_le
-from ak_lab4.simulator.__main__ import apply_input_to_cpu, main as simulator_main
+from ak_lab4.simulator.__main__ import apply_input_to_cpu
+from ak_lab4.simulator.__main__ import main as simulator_main
 
 
 def test_apply_input_from_file(tmp_path) -> None:
