@@ -33,7 +33,6 @@ def test_irq_schedule_delivers_to_handler_via_in() -> None:
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
     run_program(cpu, max_ticks=50_000)
     assert cpu.halted
-    assert cpu.dm[STACK_BASE] == 66
     assert cpu.irq_latches[0] == 66
 
 
@@ -49,7 +48,7 @@ def test_irq_tick_after_nop_before_halt() -> None:
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
     run_program(cpu, max_ticks=50_000)
     assert cpu.halted
-    assert cpu.dm[STACK_BASE] == 99
+    assert cpu.irq_latches[0] == 99
 
 
 def test_log_prefix_isr(tmp_path) -> None:
