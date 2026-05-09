@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections import deque
 from dataclasses import dataclass, field
 from typing import TextIO
 
@@ -49,8 +50,18 @@ class Cpu:
     sp: int = STACK_BASE
     ticks: int = 0
     halted: bool = False
-    # Заглушка ввода: всегда 0; вывод порта 1 — накапливаем байты (младший октет)
+    # Ввод порта DATA_IN: байты снимаются слева; пустая очередь → на стек кладётся −1 (EOF).
+    input_queue: deque[int] = field(default_factory=deque)
+    # Вывод порта DATA_OUT — накапливаем байты (младший октет слова).
     out_bytes: list[int] = field(default_factory=list)
+
+    def _read_port_in(self, port: int) -> int:
+        """Значение для IN: для DATA_IN — следующий байт или −1 (EOF); иначе 0."""
+        if port == int(Port.DATA_IN):
+            if self.input_queue:
+                return self.input_queue.popleft() & 0xFF
+            return -1
+        return 0
 
     def _ensure_dm_addr(self, addr: int) -> int:
         if addr < 0 or addr >= DM_SIZE_WORDS:
@@ -196,9 +207,8 @@ class Cpu:
                 port = operand & 0xFFFF
                 if (operand >> 16) & 0xFF != 0:
                     pass  # зарезервированные биты — игнор в v0
-                # Заглушка: всегда 0 (trap/ввод — часть 2)
-                _ = port
-                self._push(0)
+                val = self._read_port_in(port)
+                self._push(_unsigned32(val))
                 self.pc = next_pc
             case x if x == Opcode.OUT:
                 val = self._pop()
