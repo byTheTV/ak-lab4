@@ -6,6 +6,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from ak_lab4.isa import NUM_IRQ_LINES
+
 
 @dataclass(frozen=True)
 class IrqScheduleEvent:
@@ -45,6 +47,9 @@ def load_irq_schedule_json(path: Path) -> tuple[IrqScheduleEvent, ...]:
             raise ValueError(msg)
         tick = int(o["tick"])
         irq = int(o["irq"])
+        if irq < 0 or irq >= NUM_IRQ_LINES:
+            msg = f"Расписание: irq вне 0…{NUM_IRQ_LINES - 1}"
+            raise ValueError(msg)
         value = _byte_from_json_value(o.get("value", 0))
         out.append(IrqScheduleEvent(tick=tick, irq=irq, value=value))
     out.sort(key=lambda e: e.tick)

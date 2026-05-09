@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ak_lab4.isa import Opcode, Port, pack_word
+from ak_lab4.isa import NUM_IRQ_LINES, Opcode, Port, pack_word
 from ak_lab4.translator.ast import Expr, IntLit, SList, StrLit, Symbol
 
 IMM24_MIN: int = -(2**23)
@@ -48,6 +48,13 @@ def _collect_bindings(
                     and isinstance(items[1], Symbol)
                 ):
                     order_setq.append(items[1].name)
+                if (
+                    len(items) >= 3
+                    and isinstance(items[0], Symbol)
+                    and items[0].name == "interrupt"
+                ):
+                    for b in items[2:]:
+                        walk(b)
                 for it in items:
                     walk(it)
             case _:
@@ -123,6 +130,44 @@ def _parse_defun_full(d: SList) -> tuple[str, tuple[str, ...], Expr]:
     else:
         body = SList((Symbol("progn"),) + tuple(body_forms))
     return name_el.name, tuple(params), body
+
+
+def _is_interrupt_form(e: Expr) -> bool:
+    return (
+        isinstance(e, SList)
+        and len(e.items) >= 3
+        and isinstance(e.items[0], Symbol)
+        and e.items[0].name == "interrupt"
+    )
+
+
+def _parse_interrupt_form(e: SList) -> tuple[int, Expr]:
+    _kw, irq_el, *rest = e.items
+    if not isinstance(irq_el, IntLit):
+        raise CodegenError("interrupt: второй элемент — номер линии (целый литерал)")
+    irq = irq_el.value
+    if irq < 0 or irq >= NUM_IRQ_LINES:
+        raise CodegenError(f"interrupt: номер линии 0…{NUM_IRQ_LINES - 1}")
+    if not rest:
+        raise CodegenError("interrupt: нужно тело обработчика")
+    if len(rest) == 1:
+        body: Expr = rest[0]
+    else:
+        body = SList((Symbol("progn"),) + tuple(rest))
+    return irq, body
+
+
+def _split_trailing_interrupts(
+    mains: tuple[Expr, ...],
+) -> tuple[tuple[Expr, ...], tuple[SList, ...]]:
+    lst = list(mains)
+    intr: list[SList] = []
+    while lst and _is_interrupt_form(lst[-1]):
+        last = lst.pop()
+        assert isinstance(last, SList)
+        intr.append(last)
+    intr.reverse()
+    return tuple(lst), tuple(intr)
 
 
 def _split_defuns_first(forms: tuple[Expr, ...]) -> tuple[tuple[SList, ...], tuple[Expr, ...]]:
@@ -218,6 +263,14 @@ def _emit(
                         parts.append(pack_word(Opcode.DROP, 0))
                         cur = pc0 + len(parts)
                 return parts
+            if head.name == "ei":
+                if args:
+                    raise CodegenError("ei не принимает аргументов")
+                return [pack_word(Opcode.EI, 0)]
+            if head.name == "di":
+                if args:
+                    raise CodegenError("di не принимает аргументов")
+                return [pack_word(Opcode.CLI, 0)]
             if head.name == "in":
                 if args:
                     raise CodegenError("in не принимает аргументов")
@@ -457,6 +510,140 @@ def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> 
     return words
 
 
+def _compile_with_defuns_interrupts(
+    defuns: tuple[SList, ...],
+    mains: tuple[Expr, ...],
+    irq_handlers: dict[int, Expr],
+) -> list[int]:
+    """Как _compile_with_defuns, но IM[0]=jmp main, IM[1..NUM_IRQ]=jmp handler; тела после HALT — RET."""
+    irq_vals = tuple(irq_handlers.values())
+    all_forms = tuple(defuns) + mains + irq_vals
+    global_slots, param_slot_addr = _collect_bindings(all_forms)
+
+    ordered: list[tuple[str, Expr]] = []
+    seen_names: set[str] = set()
+    func_param_sig: dict[str, tuple[str, ...]] = {}
+    for d in defuns:
+        name, params, body = _parse_defun_full(d)
+        if name in seen_names:
+            raise CodegenError(f"Повторное определение функции «{name}»")
+        seen_names.add(name)
+        func_param_sig[name] = params
+        ordered.append((name, body))
+
+    names = [n for n, _ in ordered]
+    dummy_targets: dict[str, int] = {n: 0 for n in names}
+
+    lens: dict[str, int] = {}
+    for name, body in ordered:
+        param_scope = {p: param_slot_addr[name, p] for p in func_param_sig[name]}
+        chunk = _emit(
+            body,
+            global_slots,
+            0,
+            dummy_targets,
+            param_scope,
+            func_param_sig,
+            param_slot_addr,
+        )
+        lens[name] = len(chunk)
+
+    header_slots = 1 + NUM_IRQ_LINES
+    starts: dict[str, int] = {}
+    pos = header_slots
+    for name, _ in ordered:
+        starts[name] = pos
+        pos += lens[name] + 2
+
+    main_start = pos
+    full_targets: dict[str, int] = {n: starts[n] for n in names}
+
+    words: list[int] = [pack_word(Opcode.JMP, 0)] + [pack_word(Opcode.JMP, 0)] * NUM_IRQ_LINES
+    for name, body in ordered:
+        start_pc = starts[name]
+        param_scope = {p: param_slot_addr[name, p] for p in func_param_sig[name]}
+        words.extend(
+            _emit(
+                body,
+                global_slots,
+                start_pc,
+                full_targets,
+                param_scope,
+                func_param_sig,
+                param_slot_addr,
+            )
+        )
+        words.append(pack_word(Opcode.SWAP, 0))
+        words.append(pack_word(Opcode.RET, 0))
+
+    words[0] = pack_word(Opcode.JMP, main_start)
+
+    main_expr = mains[0] if len(mains) == 1 else SList((Symbol("progn"),) + mains)
+    words.extend(
+        _emit(
+            main_expr,
+            global_slots,
+            main_start,
+            full_targets,
+            None,
+            func_param_sig,
+            param_slot_addr,
+        )
+    )
+    words.append(pack_word(Opcode.HALT, 0))
+
+    handler_pc: dict[int, int] = {}
+    for irq in sorted(irq_handlers.keys()):
+        entry = len(words)
+        handler_pc[irq] = entry
+        words.extend(
+            _emit(
+                irq_handlers[irq],
+                global_slots,
+                entry,
+                full_targets,
+                None,
+                func_param_sig,
+                param_slot_addr,
+            )
+        )
+        words.append(pack_word(Opcode.RET, 0))
+
+    for irq, tgt in handler_pc.items():
+        words[1 + irq] = pack_word(Opcode.JMP, tgt)
+
+    return words
+
+
+def _compile_mains_interrupts(
+    mains: tuple[Expr, ...],
+    irq_handlers: dict[int, Expr],
+) -> list[int]:
+    irq_vals = tuple(irq_handlers.values())
+    all_forms = tuple(mains) + irq_vals
+    global_slots, _ = _collect_bindings(all_forms)
+    header_slots = 1 + NUM_IRQ_LINES
+    main_start = header_slots
+    main_expr = mains[0] if len(mains) == 1 else SList((Symbol("progn"),) + mains)
+
+    words: list[int] = [pack_word(Opcode.JMP, 0)] + [pack_word(Opcode.JMP, 0)] * NUM_IRQ_LINES
+    words.extend(_emit(main_expr, global_slots, main_start, None, None, None, None))
+    words.append(pack_word(Opcode.HALT, 0))
+    words[0] = pack_word(Opcode.JMP, main_start)
+
+    handler_pc: dict[int, int] = {}
+    for irq in sorted(irq_handlers.keys()):
+        entry = len(words)
+        handler_pc[irq] = entry
+        words.extend(
+            _emit(irq_handlers[irq], global_slots, entry, None, None, None, None)
+            + [pack_word(Opcode.RET, 0)]
+        )
+    for irq, tgt in handler_pc.items():
+        words[1 + irq] = pack_word(Opcode.JMP, tgt)
+    return words
+
+
 def compile_program(expr: Expr) -> list[int]:
     """Одно выражение-программа: код и завершающий HALT."""
     global_slots, _ = _collect_bindings((expr,))
@@ -464,16 +651,36 @@ def compile_program(expr: Expr) -> list[int]:
 
 
 def compile_forms(forms: tuple[Expr, ...]) -> list[int]:
-    """Несколько верхнеуровневых форм; при наличии defun — модуль с JMP на main."""
+    """Несколько верхнеуровневых форм; defun / опционально trailing (interrupt n …)."""
     if not forms:
         raise CodegenError("Нет форм для компиляции")
-    defuns, mains = _split_defuns_first(forms)
+    defuns, mains_tail = _split_defuns_first(forms)
+    mains_only, interrupt_forms = _split_trailing_interrupts(mains_tail)
+
+    if interrupt_forms:
+        irq_handlers: dict[int, Expr] = {}
+        for form in interrupt_forms:
+            assert isinstance(form, SList)
+            irq, body = _parse_interrupt_form(form)
+            if irq in irq_handlers:
+                raise CodegenError(f"interrupt {irq}: повторное объявление")
+            irq_handlers[irq] = body
+        if defuns:
+            if not mains_only:
+                raise CodegenError("После defun нужен основной код до обработчиков interrupt")
+            return _compile_with_defuns_interrupts(defuns, mains_only, irq_handlers)
+        if not mains_only:
+            raise CodegenError("Нужна основная программа перед (interrupt …)")
+        return _compile_mains_interrupts(mains_only, irq_handlers)
+
     if defuns:
-        if not mains:
+        if not mains_only:
             raise CodegenError("После defun нужно хотя бы одно основное выражение")
-        return _compile_with_defuns(defuns, mains)
+        return _compile_with_defuns(defuns, mains_only)
     if len(forms) == 1:
         return compile_program(forms[0])
-    wrapped = SList((Symbol("progn"),) + tuple(forms))
-    global_slots, _ = _collect_bindings(forms)
+    if len(mains_only) == 1:
+        return compile_program(mains_only[0])
+    wrapped = SList((Symbol("progn"),) + mains_only)
+    global_slots, _ = _collect_bindings(mains_only)
     return _emit(wrapped, global_slots, 0, None, None, None, None) + [pack_word(Opcode.HALT, 0)]
