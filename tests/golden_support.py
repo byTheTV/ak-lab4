@@ -12,14 +12,17 @@ from ak_lab4.translator import compile_forms, parse_many
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GOLDEN_ROOT = REPO_ROOT / "golden"
 
+# Имя исходника в каждом кейсе (расширение .tv — условное имя для языка варианта).
+GOLDEN_SOURCE_NAME = "source.tv"
+
 
 def run_case(case: str, *, max_ticks: int = 10_000_000) -> Cpu:
-    """Скомпилировать ``golden/<case>/source.lisp``, исполнить до HALT.
+    """Скомпилировать ``golden/<case>/source.tv``, исполнить до HALT.
 
     Если есть ``golden/<case>/input.txt``, байты подаются в ``Cpu.input_queue`` (порт DATA_IN).
     """
     base = GOLDEN_ROOT / case
-    src = (base / "source.lisp").read_text(encoding="utf-8")
+    src = (base / GOLDEN_SOURCE_NAME).read_text(encoding="utf-8")
     forms = parse_many(src)
     words = compile_forms(forms)
     im, dm = init_memory_from_segments(words, [])
