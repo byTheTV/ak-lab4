@@ -14,12 +14,12 @@ _CLI_EPILOG = """\
   python -m ak_lab4.translator prog.tv -o code.bin --data-out data.bin
   python -m ak_lab4.simulator code.bin data.bin
 
-Ввод порта:
-  ... simulator ... --input stdin.bin
+Ввод для порта DATA_IN:
+  … simulator … --input stdin.bin
 
-Trap (JSON массив событий по тактам):
-  ... simulator ... --schedule irq.json
-  см. docs/io-trap-port.md
+Trap по тактам (JSON):
+  … simulator … --schedule irq.json
+  подробнее docs/io-trap-port.md
 """
 
 
@@ -30,31 +30,31 @@ def write_listing(path: Path, words: list[int]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        description="file -> code.bin; несколько форм подряд склеиваются как progn",
+        description="исходник → code.bin; несколько форм подряд — как один progn",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=_CLI_EPILOG,
     )
-    p.add_argument("input", type=Path, help="Исходник")
+    p.add_argument("input", type=Path, help="файл с программой")
     p.add_argument(
         "-o",
         "--output",
         type=Path,
         default=Path("code.bin"),
-        help="Память команд (default: code.bin)",
+        help="куда писать code.bin (по умолчанию code.bin)",
     )
     p.add_argument(
         "--data-out",
         type=Path,
         default=None,
         metavar="PATH",
-        help="data.bin; нужен, если в программе есть строковые литералы",
+        help="data.bin — только если есть строковые литералы",
     )
     p.add_argument(
         "--listing",
         type=Path,
         default=None,
         metavar="PATH",
-        help="листинг команд",
+        help="дамп слов IM построчно",
     )
     args = p.parse_args(argv)
 
@@ -71,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if len(forms) == 0:
-        print("ошибка: пустой файл", file=sys.stderr)
+        print("файл пустой", file=sys.stderr)
         return 1
 
     try:
@@ -85,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
         if prog.data:
             if args.data_out is None:
                 print(
-                    "ошибка: укажите --data-out (в программе есть литералы в сегменте данных)",
+                    "нужен --data-out: в коде есть строковые литералы",
                     file=sys.stderr,
                 )
                 return 1

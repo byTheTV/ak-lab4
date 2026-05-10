@@ -27,7 +27,7 @@ def _byte_from_json_value(v: object) -> int:
         return v & 0xFF
     if isinstance(v, float):
         return int(v) & 0xFF
-    msg = f"schedule value: жду str/int/float, пришёл {type(v).__name__}"
+    msg = f"schedule: в value жду str/int/float, не {type(v).__name__}"
     raise TypeError(msg)
 
 
@@ -35,17 +35,17 @@ def load_irq_schedule_json(path: Path) -> tuple[IrqScheduleEvent, ...]:
     """JSON-массив {tick, irq, value}; value — число или одна буква в строке"""
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, list):
-        msg = "schedule: нужен JSON-массив"
+        msg = "schedule: нужен массив JSON"
         raise ValueError(msg)
     out: list[IrqScheduleEvent] = []
     for i, o in enumerate(raw):
         if not isinstance(o, dict):
-            msg = f"schedule: элемент {i} не объект"
+            msg = f"schedule: элемент {i} не объект JSON"
             raise ValueError(msg)
         tick = int(o["tick"])
         irq = int(o["irq"])
         if irq < 0 or irq >= NUM_IRQ_LINES:
-            msg = f"schedule: irq не в 0…{NUM_IRQ_LINES - 1}"
+            msg = f"schedule: irq вне 0…{NUM_IRQ_LINES - 1}"
             raise ValueError(msg)
         value = _byte_from_json_value(o.get("value", 0))
         out.append(IrqScheduleEvent(tick=tick, irq=irq, value=value))

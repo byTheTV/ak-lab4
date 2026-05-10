@@ -19,29 +19,29 @@ def apply_input_to_cpu(cpu: Cpu, spec: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="Симулятор Гарварда: code.bin и data.bin")
-    p.add_argument("code", type=Path, help="code.bin")
-    p.add_argument("data", type=Path, help="data.bin")
-    p.add_argument("--log", type=Path, default=None, help="файл журнала")
+    p = argparse.ArgumentParser(description="Гарвард: пара code.bin + data.bin")
+    p.add_argument("code", type=Path, help="бинарник кода (IM)")
+    p.add_argument("data", type=Path, help="бинарник данных (DM)")
+    p.add_argument("--log", type=Path, default=None, help="куда писать журнал исполнения")
     p.add_argument(
         "--max-ticks",
         type=int,
         default=10_000_000,
         metavar="N",
-        help="предел суммарных тактов (default: 10^7)",
+        help="стоп после стольких тактов (по умолчанию 10^7)",
     )
     p.add_argument(
         "--input",
         metavar="PATH|-",
         default=None,
-        help="байты в очередь DATA_IN; «-» — stdin целиком",
+        help="байты в DATA_IN; «-» — весь stdin",
     )
     p.add_argument(
         "--schedule",
         type=Path,
         default=None,
         metavar="PATH",
-        help="JSON [{tick, irq, value}, …] для trap",
+        help="JSON событий trap: tick, irq, value",
     )
     args = p.parse_args(argv)
 
@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
             log_file.close()
 
     if not cpu.halted:
-        print("не достигнут HALT (см. лимит тактов)", file=sys.stderr)
+        print("упёрлись в лимит тактов — HALT не был", file=sys.stderr)
         return 1
     print(f"HALT ticks={cpu.ticks} PC={cpu.pc} SP=0x{cpu.sp:X}")
     return 0

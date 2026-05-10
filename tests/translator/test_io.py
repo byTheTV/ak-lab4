@@ -50,12 +50,12 @@ def test_out_in_progn_side_effect() -> None:
 
 
 def test_in_requires_zero_args() -> None:
-    with pytest.raises(CodegenError, match="in не принимает"):
+    with pytest.raises(CodegenError, match="in без аргументов"):
         compile_program(parse("(in 0)"))
 
 
 def test_out_requires_one_arg() -> None:
-    with pytest.raises(CodegenError, match="out ожидает"):
+    with pytest.raises(CodegenError, match="out: один"):
         compile_program(parse("(out)"))
 
 

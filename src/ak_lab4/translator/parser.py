@@ -49,7 +49,7 @@ class _Parser:
 
     def _take(self) -> Token:
         if self._i >= len(self._t):
-            raise ParseError("Неожиданный конец ввода")
+            raise ParseError("ввод оборвался раньше времени")
         t = self._t[self._i]
         self._i += 1
         return t
@@ -58,12 +58,12 @@ class _Parser:
         if not self.done():
             t = self._peek()
             assert t is not None
-            raise ParseError("Лишние токены после выражения", t.loc)
+            raise ParseError("после выражения остался лишний текст", t.loc)
 
     def parse_expr(self) -> Expr:
         t = self._peek()
         if t is None:
-            raise ParseError("Ожидалось выражение", None)
+            raise ParseError("здесь нужно выражение", None)
         if t.kind == TokKind.LPAREN:
             return self._parse_list()
         if t.kind == TokKind.INT:
@@ -76,8 +76,8 @@ class _Parser:
             self._take()
             return Symbol(t.text)
         if t.kind == TokKind.RPAREN:
-            raise ParseError("Лишняя закрывающая скобка", t.loc)
-        raise ParseError(f"Неожиданный токен {t.kind}", t.loc)
+            raise ParseError("лишняя )", t.loc)
+        raise ParseError(f"токен {t.kind} не подходит здесь", t.loc)
 
     def _parse_list(self) -> Expr:
         open_tok = self._take()
@@ -86,7 +86,7 @@ class _Parser:
         while True:
             t = self._peek()
             if t is None:
-                raise ParseError("Не хватает ')'", open_tok.loc)
+                raise ParseError("не хватает )", open_tok.loc)
             if t.kind == TokKind.RPAREN:
                 self._take()
                 return SList(tuple(parts))
@@ -103,7 +103,7 @@ class _Parser:
         while j < len(inner):
             if inner[j] == "\\":
                 if j + 1 >= len(inner):
-                    raise ParseError("Незавершённый escape", t.loc)
+                    raise ParseError("escape обрывается", t.loc)
                 nxt = inner[j + 1]
                 if nxt == "n":
                     out.append("\n")

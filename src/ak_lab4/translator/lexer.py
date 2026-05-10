@@ -79,7 +79,7 @@ def tokenize(source: str) -> list[Token]:
                 if source[j] == "\\":
                     if j + 1 >= n:
                         raise LexError(
-                            "Незавершённый escape в строке",
+                            "escape обрывается в конце строки",
                             SourceLoc(j, line, col + (j - i)),
                         )
                     j += 2
@@ -92,7 +92,7 @@ def tokenize(source: str) -> list[Token]:
                     break
                 j += 1
             else:
-                raise LexError("Незакрытая строковая константа", start_loc)
+                raise LexError("строка без закрывающей кавычки", start_loc)
             continue
 
         # число: [0-9]+ или явный знак +/-
@@ -105,7 +105,7 @@ def tokenize(source: str) -> list[Token]:
                 j += 1
             start_digits = j
             if j >= n or not source[j].isdigit():
-                raise LexError("Ожидались цифры после знака", start_loc)
+                raise LexError("после знака +/- нужны цифры", start_loc)
             while j < n and source[j].isdigit():
                 j += 1
             num_str = source[i:j]
@@ -121,7 +121,7 @@ def tokenize(source: str) -> list[Token]:
             j += 1
         sym = source[i:j]
         if not sym:
-            raise LexError(f"Неожиданный символ {c!r}", start_loc)
+            raise LexError(f"лишний символ {c!r}", start_loc)
         out.append(Token(TokKind.SYMBOL, sym, start_loc, None))
         col += j - i
         i = j

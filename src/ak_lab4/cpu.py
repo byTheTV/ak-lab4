@@ -100,11 +100,11 @@ class Cpu:
     def _read_vector_target(self, irq: int) -> int:
         idx = 1 + irq
         if idx < 0 or idx >= IM_SIZE_WORDS:
-            msg = f"Вектор IRQ {irq} вне IM"
+            msg = f"вектор IRQ{irq}: слово @{idx} вне IM"
             raise CpuFault(msg)
         op_b, opnd = unpack_word(self.im[idx])
         if op_b != int(Opcode.JMP):
-            msg = f"Вектор IRQ {irq}: ожидался jmp (word @{idx})"
+            msg = f"вектор IRQ{irq}: в IM[{idx}] должен быть jmp"
             raise CpuFault(msg)
         return self._ensure_im_pc(opnd & OPERAND_MASK)
 
@@ -124,20 +124,20 @@ class Cpu:
 
     def _ensure_dm_addr(self, addr: int) -> int:
         if addr < 0 or addr >= DM_SIZE_WORDS:
-            msg = f"Адрес данных вне диапазона: {addr}"
+            msg = f"DM: адрес {addr} мимо диапазона"
             raise CpuFault(msg)
         return addr
 
     def _ensure_im_pc(self, addr: int) -> int:
         if addr < 0 or addr >= IM_SIZE_WORDS:
-            msg = f"PC вне диапазона: {addr}"
+            msg = f"PC {addr} вне IM"
             raise CpuFault(msg)
         return addr
 
     def _push(self, value: int) -> None:
         v = value & 0xFFFFFFFF
         if self.sp >= DM_SIZE_WORDS:
-            msg = "Переполнение стека (SP)"
+            msg = "стек переполнен"
             raise CpuFault(msg)
         a = self._ensure_dm_addr(self.sp)
         self.dm[a] = v
@@ -145,7 +145,7 @@ class Cpu:
 
     def _pop(self) -> int:
         if self.sp <= STACK_BASE:
-            msg = "Недопустимое снятие со стека (пустой стек)"
+            msg = "pop из пустого стека"
             raise CpuFault(msg)
         self.sp -= 1
         a = self._ensure_dm_addr(self.sp)
@@ -153,7 +153,7 @@ class Cpu:
 
     def _peek_top(self) -> int:
         if self.sp <= STACK_BASE:
-            msg = "Пустой стек при dup/top"
+            msg = "dup при пустом стеке"
             raise CpuFault(msg)
         a = self._ensure_dm_addr(self.sp - 1)
         return self.dm[a] & 0xFFFFFFFF
@@ -229,7 +229,7 @@ class Cpu:
                 x1 = self._pop()
                 y = self._pop()
                 if x1 == 0:
-                    raise CpuFault("Целое деление на 0")
+                    raise CpuFault("деление на 0")
                 q = math.trunc(_signed32(y) / _signed32(x1))
                 self._push(_unsigned32(q))
                 self.pc = next_pc
@@ -237,7 +237,7 @@ class Cpu:
                 x1 = self._pop()
                 y = self._pop()
                 if x1 == 0:
-                    raise CpuFault("Остаток при делении на 0")
+                    raise CpuFault("mod и делитель 0")
                 yi, xi = _signed32(y), _signed32(x1)
                 r = yi - math.trunc(yi / xi) * xi
                 self._push(_unsigned32(r))
@@ -293,7 +293,7 @@ class Cpu:
                 self.halted = True
                 self.pc = next_pc
             case _:
-                msg = f"Неизвестный опкод: 0x{op_byte:02X} в PC={pc0}, слово={word:08X}"
+                msg = f"неизвестный опкод 0x{op_byte:02X} @PC={pc0} word={word:08X}"
                 raise CpuFault(msg)
 
         self._add_ticks(op)
@@ -338,12 +338,12 @@ def init_memory_from_segments(
     dm = [0] * DM_SIZE_WORDS
     for i, w in enumerate(code_words):
         if i >= IM_SIZE_WORDS:
-            msg = "Сегмент кода не помещается в IM"
+            msg = "сегмент кода не влезает в IM"
             raise CpuFault(msg)
         im[i] = w & 0xFFFFFFFF
     for i, w in enumerate(data_words):
         if i >= DM_SIZE_WORDS:
-            msg = "Сегмент данных не помещается в DM"
+            msg = "сегмент данных не влезает в DM"
             raise CpuFault(msg)
         dm[i] = w & 0xFFFFFFFF
     return im, dm
@@ -358,6 +358,6 @@ def run_program(
     """крутить step до halt/fault/лимита тактов"""
     while not cpu.halted:
         if cpu.ticks >= max_ticks:
-            msg = f"Превышен лимит тактов ({max_ticks})"
+            msg = f"лимит тактов ({max_ticks})"
             raise CpuFault(msg)
         cpu.step(log=log)
