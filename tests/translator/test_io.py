@@ -12,7 +12,7 @@ from ak_lab4.translator.codegen import CodegenError, compile_program
 
 
 def _run(src: str, *, input_bytes: list[int] | None = None) -> Cpu:
-    words = compile_program(parse(src))
+    words = compile_program(parse(src)).code
     im, dm = init_memory_from_segments(words, [])
     q = deque(input_bytes) if input_bytes is not None else deque()
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, input_queue=q)
@@ -40,7 +40,7 @@ def test_out_writes_low_byte_and_returns_value() -> None:
 def test_out_in_progn_side_effect() -> None:
     """Последняя форма progn задаёт результат на стеке."""
     src = "(progn (out 1) (+ 2 3))"
-    words = compile_forms(parse_many(src))
+    words = compile_forms(parse_many(src)).code
     im, dm = init_memory_from_segments(words, [])
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE)
     run_program(cpu, max_ticks=100_000)
@@ -60,14 +60,14 @@ def test_out_requires_one_arg() -> None:
 
 
 def test_in_generates_in_data_port() -> None:
-    w = compile_program(parse("(in)"))
+    w = compile_program(parse("(in)")).code
     op, imm = unpack_word(w[0])
     assert op == int(Opcode.IN)
     assert imm == int(Port.DATA_IN)
 
 
 def test_out_generates_dup_and_out() -> None:
-    w = compile_program(parse("(out 9)"))
+    w = compile_program(parse("(out 9)")).code
     assert unpack_word(w[0])[0] == int(Opcode.PUSH_IMM)
     assert unpack_word(w[1])[0] == int(Opcode.DUP)
     op, imm = unpack_word(w[2])

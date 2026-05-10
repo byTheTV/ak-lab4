@@ -6,7 +6,7 @@ from ak_lab4.translator import compile_forms, parse_many
 
 
 def _run_module(src: str) -> Cpu:
-    words = compile_forms(parse_many(src))
+    words = compile_forms(parse_many(src)).code
     im, dm = init_memory_from_segments(words, [])
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE)
     run_program(cpu, max_ticks=500_000)

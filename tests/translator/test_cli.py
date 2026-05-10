@@ -13,7 +13,7 @@ def test_cli_compiles_add(tmp_path: Path) -> None:
     out = tmp_path / "code.bin"
     rc = translator_main([str(src), "-o", str(out)])
     assert rc == 0
-    assert load_words_le(out) == compile_program(parse("(+ 1 2)"))
+    assert load_words_le(out) == compile_program(parse("(+ 1 2)")).code
 
 
 def test_cli_compiles_multiple_forms_as_progn(tmp_path: Path) -> None:
@@ -23,8 +23,8 @@ def test_cli_compiles_multiple_forms_as_progn(tmp_path: Path) -> None:
     rc = translator_main([str(src), "-o", str(out)])
     assert rc == 0
     many = parse_many(src.read_text(encoding="utf-8"))
-    assert load_words_le(out) == compile_forms(many)
-    assert load_words_le(out) == compile_program(parse("(progn (setq a 1) (+ a 2))"))
+    assert load_words_le(out) == compile_forms(many).code
+    assert load_words_le(out) == compile_program(parse("(progn (setq a 1) (+ a 2))")).code
 
 
 def test_cli_listing_and_data_out(tmp_path: Path) -> None:
@@ -40,7 +40,7 @@ def test_cli_listing_and_data_out(tmp_path: Path) -> None:
     assert data.read_bytes() == b""
     lines = [ln for ln in lst.read_text(encoding="utf-8").splitlines() if ln.strip()]
     assert len(lines) == len(load_words_le(code))
-    assert load_words_le(code) == compile_program(parse("42"))
+    assert load_words_le(code) == compile_program(parse("42")).code
 
 
 def test_cli_compiles_out_form(tmp_path: Path) -> None:
@@ -49,4 +49,4 @@ def test_cli_compiles_out_form(tmp_path: Path) -> None:
     out = tmp_path / "code.bin"
     rc = translator_main([str(src), "-o", str(out)])
     assert rc == 0
-    assert load_words_le(out) == compile_program(parse("(out (+ 1 2))"))
+    assert load_words_le(out) == compile_program(parse("(out (+ 1 2))")).code

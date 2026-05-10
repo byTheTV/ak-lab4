@@ -8,7 +8,7 @@ from ak_lab4.translator import CodegenError, compile_forms, compile_program, par
 
 
 def _run(src: str) -> Cpu:
-    words = compile_program(parse(src))
+    words = compile_program(parse(src)).code
     im, dm = init_memory_from_segments(words, [])
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE)
     run_program(cpu, max_ticks=200_000)
@@ -28,13 +28,13 @@ def test_progn_three_drops() -> None:
 
 
 def test_compile_forms_one_same_as_compile_program() -> None:
-    assert compile_forms(parse_many("(+ 1 2)")) == compile_program(parse("(+ 1 2)"))
+    assert compile_forms(parse_many("(+ 1 2)")).code == compile_program(parse("(+ 1 2)")).code
 
 
 def test_compile_forms_two_matches_progn() -> None:
     src = "(setq a 1)(+ a 2)"
-    w = compile_forms(parse_many(src))
-    assert w == compile_program(parse("(progn (setq a 1) (+ a 2))"))
+    w = compile_forms(parse_many(src)).code
+    assert w == compile_program(parse("(progn (setq a 1) (+ a 2))")).code
 
 
 def test_compile_forms_empty_raises() -> None:

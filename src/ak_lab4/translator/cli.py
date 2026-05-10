@@ -75,17 +75,26 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        words = compile_forms(forms)
+        prog = compile_forms(forms)
     except CodegenError as e:
         print(str(e), file=sys.stderr)
         return 1
 
     try:
-        write_words_le(args.output, words)
-        if args.data_out is not None:
+        write_words_le(args.output, prog.code)
+        if prog.data:
+            if args.data_out is None:
+                print(
+                    "Ошибка: в программе есть строковые литералы — укажите --data-out для "
+                    "сегмента данных (Гарвард).",
+                    file=sys.stderr,
+                )
+                return 1
+            write_words_le(args.data_out, prog.data)
+        elif args.data_out is not None:
             write_words_le(args.data_out, [])
         if args.listing is not None:
-            write_listing(args.listing, words)
+            write_listing(args.listing, prog.code)
     except OSError as e:
         print(f"Ошибка записи: {e}", file=sys.stderr)
         return 2

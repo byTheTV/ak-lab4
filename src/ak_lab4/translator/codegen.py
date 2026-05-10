@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from ak_lab4.isa import NUM_IRQ_LINES, Opcode, Port, pack_word
 from ak_lab4.translator.ast import Expr, IntLit, SList, StrLit, Symbol
 
@@ -21,6 +23,14 @@ class CodegenError(ValueError):
     """Неподдерживаемая конструкция или неверная арность."""
 
 
+@dataclass
+class CompiledProgram:
+    """Результат компиляции: Гарвард — память команд и память данных (pstr и слоты переменных)."""
+
+    code: list[int]
+    data: list[int]
+
+
 def _check_imm24(v: int) -> int:
     if v < IMM24_MIN or v > IMM24_MAX:
         msg = f"Литерал {v} вне диапазона 24-бит signed ({IMM24_MIN}…{IMM24_MAX})"
@@ -30,6 +40,8 @@ def _check_imm24(v: int) -> int:
 
 def _collect_bindings(
     forms: tuple[Expr, ...],
+    *,
+    slot_base: int = 0,
 ) -> tuple[dict[str, int], dict[tuple[str, str], int]]:
     """Глобальные слоты setq + слоты параметров (fname, pname) → адрес DM."""
 
@@ -64,7 +76,7 @@ def _collect_bindings(
         walk(f)
 
     global_slots: dict[str, int] = {}
-    nxt = 0
+    nxt = slot_base
     for nm in order_setq:
         if nm not in global_slots:
             global_slots[nm] = nxt
@@ -83,6 +95,47 @@ def _collect_bindings(
                 nxt += 1
 
     return global_slots, param_slot
+
+
+def _walk_collect_str_literals(e: Expr, seen: set[str], ordered: list[str]) -> None:
+    """Порядок первых вхождений уникальных строковых литералов."""
+    match e:
+        case StrLit(s):
+            if s not in seen:
+                seen.add(s)
+                ordered.append(s)
+        case SList(items):
+            for it in items:
+                _walk_collect_str_literals(it, seen, ordered)
+        case _:
+            pass
+
+
+def _ordered_unique_strings_from_forms(forms: tuple[Expr, ...]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for f in forms:
+        _walk_collect_str_literals(f, seen, ordered)
+    return ordered
+
+
+def _layout_pstr(strings: list[str]) -> tuple[list[int], dict[str, int]]:
+    """Слова данных: [len][ord(c0)][ord(c1)]…; база pstr — адрес слова длины."""
+    data: list[int] = []
+    addr: dict[str, int] = {}
+    for s in strings:
+        if len(s) > IMM24_MAX:
+            msg = f"Строка длиннее допустимого для размещения ({IMM24_MAX})"
+            raise CodegenError(msg)
+        base = len(data)
+        addr[s] = base
+        data.append(len(s) & 0xFFFFFFFF)
+        for ch in s:
+            o = ord(ch)
+            if o > 0xFFFFFFFF:
+                raise CodegenError("Символ вне диапазона одного машинного слова")
+            data.append(o & 0xFFFFFFFF)
+    return data, addr
 
 
 def _slot_addr(
@@ -195,10 +248,11 @@ def _emit_n_ary(
     param_scope: dict[str, int] | None,
     func_param_sig: dict[str, tuple[str, ...]] | None,
     param_slot_addr: dict[tuple[str, str], int] | None,
+    string_addrs: dict[str, int] | None,
 ) -> list[int]:
     if len(args) < 2:
         raise CodegenError(f"{name} требует минимум два аргумента")
-    ctx = (funcs, param_scope, func_param_sig, param_slot_addr)
+    ctx = (funcs, param_scope, func_param_sig, param_slot_addr, string_addrs)
     out: list[int] = []
     cur = pc0
     out.extend(_emit(args[0], global_slots, cur, *ctx))
@@ -221,6 +275,7 @@ def _emit(
     param_scope: dict[str, int] | None = None,
     func_param_sig: dict[str, tuple[str, ...]] | None = None,
     param_slot_addr: dict[tuple[str, str], int] | None = None,
+    string_addrs: dict[str, int] | None = None,
 ) -> list[int]:
     """func_param_sig / param_slot_addr нужны для вызовов с аргументами."""
 
@@ -228,8 +283,11 @@ def _emit(
         case IntLit(v):
             v2 = _check_imm24(v)
             return [pack_word(Opcode.PUSH_IMM, v2)]
-        case StrLit(_):
-            raise CodegenError("Строковые литералы пока не генерируются")
+        case StrLit(s):
+            if string_addrs is None or s not in string_addrs:
+                raise CodegenError("Строковый литерал вне пула (внутренняя ошибка компилятора)")
+            base = string_addrs[s]
+            return [pack_word(Opcode.PUSH_IMM, _check_imm24(base))]
         case Symbol(name):
             addr = _slot_addr(name, global_slots, param_scope)
             return [
@@ -264,6 +322,7 @@ def _emit(
                         param_scope,
                         func_param_sig,
                         param_slot_addr,
+                        string_addrs,
                     )
                     parts.extend(segment)
                     cur = pc0 + len(parts)
@@ -294,6 +353,7 @@ def _emit(
                     param_scope,
                     func_param_sig,
                     param_slot_addr,
+                    string_addrs,
                 )
                 return val_c + [
                     pack_word(Opcode.DUP, 0),
@@ -318,6 +378,7 @@ def _emit(
                         param_scope,
                         func_param_sig,
                         param_slot_addr,
+                        string_addrs,
                     )
                     + [
                         pack_word(Opcode.STORE, 0),
@@ -337,6 +398,7 @@ def _emit(
                     param_scope,
                     func_param_sig,
                     param_slot_addr,
+                    string_addrs,
                 )
                 jz_pc = pc0 + len(pred_c)
                 then_start = jz_pc + 1
@@ -348,6 +410,7 @@ def _emit(
                     param_scope,
                     func_param_sig,
                     param_slot_addr,
+                    string_addrs,
                 )
                 jmp_pc = then_start + len(then_c)
                 else_start = jmp_pc + 1
@@ -359,6 +422,7 @@ def _emit(
                     param_scope,
                     func_param_sig,
                     param_slot_addr,
+                    string_addrs,
                 )
                 end_pc = else_start + len(else_c)
                 return (
@@ -379,6 +443,7 @@ def _emit(
                     param_scope,
                     func_param_sig,
                     param_slot_addr,
+                    string_addrs,
                 )
                 right = _emit(
                     args[1],
@@ -388,6 +453,7 @@ def _emit(
                     param_scope,
                     func_param_sig,
                     param_slot_addr,
+                    string_addrs,
                 )
                 return left + right + [pack_word(Opcode.EQ, 0)]
             op = _ARITH.get(head.name)
@@ -402,6 +468,7 @@ def _emit(
                     param_scope,
                     func_param_sig,
                     param_slot_addr,
+                    string_addrs,
                 )
             if funcs is not None and head.name in funcs:
                 if func_param_sig is None or param_slot_addr is None:
@@ -426,6 +493,7 @@ def _emit(
                             param_scope,
                             func_param_sig,
                             param_slot_addr,
+                            string_addrs,
                         )
                     )
                     cur = pc0 + len(out)
@@ -436,14 +504,20 @@ def _emit(
             raise CodegenError(f"Неизвестная форма: ({head.name} …)")
 
 
-def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> list[int]:
+def _compile_with_defuns(
+    defuns: tuple[SList, ...],
+    mains: tuple[Expr, ...],
+    *,
+    slot_base: int,
+    string_addrs: dict[str, int],
+) -> list[int]:
     """Два прохода: сначала длины тел (CALL с фиктивным 0), затем раскладка и эмит с реальными PC.
 
     Так вызовы функций, объявленных ниже в файле, получают правильный адрес, и if/jz/jmp
     используют итоговый start_pc функции.
     """
     all_forms = tuple(defuns) + mains
-    global_slots, param_slot_addr = _collect_bindings(all_forms)
+    global_slots, param_slot_addr = _collect_bindings(all_forms, slot_base=slot_base)
 
     ordered: list[tuple[str, Expr]] = []
     seen_names: set[str] = set()
@@ -470,6 +544,7 @@ def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> 
             param_scope,
             func_param_sig,
             param_slot_addr,
+            string_addrs,
         )
         lens[name] = len(chunk)
 
@@ -495,6 +570,7 @@ def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> 
                 param_scope,
                 func_param_sig,
                 param_slot_addr,
+                string_addrs,
             )
         )
         words.append(pack_word(Opcode.SWAP, 0))
@@ -512,6 +588,7 @@ def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> 
             None,
             func_param_sig,
             param_slot_addr,
+            string_addrs,
         )
     )
     words.append(pack_word(Opcode.HALT, 0))
@@ -529,6 +606,8 @@ def _handler_needs_drop_before_ret(body: Expr) -> bool:
         return ex
 
     lf = last_form(body)
+    if isinstance(lf, StrLit):
+        return True
     if isinstance(lf, SList) and lf.items:
         h = lf.items[0]
         if isinstance(h, Symbol) and h.name in (
@@ -550,11 +629,14 @@ def _compile_with_defuns_interrupts(
     defuns: tuple[SList, ...],
     mains: tuple[Expr, ...],
     irq_handlers: dict[int, Expr],
+    *,
+    slot_base: int,
+    string_addrs: dict[str, int],
 ) -> list[int]:
     """_compile_with_defuns + векторы IM[1..N]=jmp handler; после HALT — обработчики и RET."""
     irq_vals = tuple(irq_handlers.values())
     all_forms = tuple(defuns) + mains + irq_vals
-    global_slots, param_slot_addr = _collect_bindings(all_forms)
+    global_slots, param_slot_addr = _collect_bindings(all_forms, slot_base=slot_base)
 
     ordered: list[tuple[str, Expr]] = []
     seen_names: set[str] = set()
@@ -581,6 +663,7 @@ def _compile_with_defuns_interrupts(
             param_scope,
             func_param_sig,
             param_slot_addr,
+            string_addrs,
         )
         lens[name] = len(chunk)
 
@@ -607,6 +690,7 @@ def _compile_with_defuns_interrupts(
                 param_scope,
                 func_param_sig,
                 param_slot_addr,
+                string_addrs,
             )
         )
         words.append(pack_word(Opcode.SWAP, 0))
@@ -624,6 +708,7 @@ def _compile_with_defuns_interrupts(
             None,
             func_param_sig,
             param_slot_addr,
+            string_addrs,
         )
     )
     words.append(pack_word(Opcode.HALT, 0))
@@ -645,6 +730,7 @@ def _compile_with_defuns_interrupts(
                 None,
                 func_param_sig,
                 param_slot_addr,
+                string_addrs,
             )
             + extra
             + [pack_word(Opcode.RET, 0)]
@@ -659,16 +745,21 @@ def _compile_with_defuns_interrupts(
 def _compile_mains_interrupts(
     mains: tuple[Expr, ...],
     irq_handlers: dict[int, Expr],
+    *,
+    slot_base: int,
+    string_addrs: dict[str, int],
 ) -> list[int]:
     irq_vals = tuple(irq_handlers.values())
     all_forms = tuple(mains) + irq_vals
-    global_slots, _ = _collect_bindings(all_forms)
+    global_slots, _ = _collect_bindings(all_forms, slot_base=slot_base)
     header_slots = 1 + NUM_IRQ_LINES
     main_start = header_slots
     main_expr = mains[0] if len(mains) == 1 else SList((Symbol("progn"),) + mains)
 
     words: list[int] = [pack_word(Opcode.JMP, 0)] + [pack_word(Opcode.JMP, 0)] * NUM_IRQ_LINES
-    words.extend(_emit(main_expr, global_slots, main_start, None, None, None, None))
+    words.extend(
+        _emit(main_expr, global_slots, main_start, None, None, None, None, string_addrs)
+    )
     words.append(pack_word(Opcode.HALT, 0))
     words[0] = pack_word(Opcode.JMP, main_start)
 
@@ -679,7 +770,7 @@ def _compile_mains_interrupts(
         hbody = irq_handlers[irq]
         extra = [pack_word(Opcode.DROP, 0)] if _handler_needs_drop_before_ret(hbody) else []
         words.extend(
-            _emit(hbody, global_slots, entry, None, None, None, None)
+            _emit(hbody, global_slots, entry, None, None, None, None, string_addrs)
             + extra
             + [pack_word(Opcode.RET, 0)]
         )
@@ -688,16 +779,26 @@ def _compile_mains_interrupts(
     return words
 
 
-def compile_program(expr: Expr) -> list[int]:
-    """Одно выражение-программа: код и завершающий HALT."""
-    global_slots, _ = _collect_bindings((expr,))
-    return _emit(expr, global_slots, 0, None, None, None, None) + [pack_word(Opcode.HALT, 0)]
+def compile_program(expr: Expr) -> CompiledProgram:
+    """Одно выражение-программа: код, сегмент данных (pstr) и завершающий HALT."""
+    strings = _ordered_unique_strings_from_forms((expr,))
+    data_words, str_addr = _layout_pstr(strings)
+    slot_base = len(data_words)
+    global_slots, _ = _collect_bindings((expr,), slot_base=slot_base)
+    code = (
+        _emit(expr, global_slots, 0, None, None, None, None, str_addr) + [pack_word(Opcode.HALT, 0)]
+    )
+    return CompiledProgram(code=code, data=data_words)
 
 
-def compile_forms(forms: tuple[Expr, ...]) -> list[int]:
+def compile_forms(forms: tuple[Expr, ...]) -> CompiledProgram:
     """Несколько верхнеуровневых форм; defun / опционально trailing (interrupt n …)."""
     if not forms:
         raise CodegenError("Нет форм для компиляции")
+    strings = _ordered_unique_strings_from_forms(forms)
+    data_words, str_addr = _layout_pstr(strings)
+    slot_base = len(data_words)
+
     defuns, mains_tail = _split_defuns_first(forms)
     mains_only, interrupt_forms = _split_trailing_interrupts(mains_tail)
 
@@ -712,19 +813,42 @@ def compile_forms(forms: tuple[Expr, ...]) -> list[int]:
         if defuns:
             if not mains_only:
                 raise CodegenError("После defun нужен основной код до обработчиков interrupt")
-            return _compile_with_defuns_interrupts(defuns, mains_only, irq_handlers)
+            code = _compile_with_defuns_interrupts(
+                defuns,
+                mains_only,
+                irq_handlers,
+                slot_base=slot_base,
+                string_addrs=str_addr,
+            )
+            return CompiledProgram(code=code, data=data_words)
         if not mains_only:
             raise CodegenError("Нужна основная программа перед (interrupt …)")
-        return _compile_mains_interrupts(mains_only, irq_handlers)
+        code = _compile_mains_interrupts(
+            mains_only,
+            irq_handlers,
+            slot_base=slot_base,
+            string_addrs=str_addr,
+        )
+        return CompiledProgram(code=code, data=data_words)
 
     if defuns:
         if not mains_only:
             raise CodegenError("После defun нужно хотя бы одно основное выражение")
-        return _compile_with_defuns(defuns, mains_only)
+        code = _compile_with_defuns(
+            defuns,
+            mains_only,
+            slot_base=slot_base,
+            string_addrs=str_addr,
+        )
+        return CompiledProgram(code=code, data=data_words)
     if len(forms) == 1:
         return compile_program(forms[0])
     if len(mains_only) == 1:
         return compile_program(mains_only[0])
     wrapped = SList((Symbol("progn"),) + mains_only)
-    global_slots, _ = _collect_bindings(mains_only)
-    return _emit(wrapped, global_slots, 0, None, None, None, None) + [pack_word(Opcode.HALT, 0)]
+    global_slots, _ = _collect_bindings(mains_only, slot_base=slot_base)
+    code = (
+        _emit(wrapped, global_slots, 0, None, None, None, None, str_addr)
+        + [pack_word(Opcode.HALT, 0)]
+    )
+    return CompiledProgram(code=code, data=data_words)

@@ -9,7 +9,7 @@ from ak_lab4.translator.codegen import CodegenError, compile_program
 
 
 def _run(src: str) -> Cpu:
-    words = compile_program(parse(src))
+    words = compile_program(parse(src)).code
     im, dm = init_memory_from_segments(words, [])
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE)
     run_program(cpu, max_ticks=100_000)
