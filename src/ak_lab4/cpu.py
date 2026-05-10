@@ -38,6 +38,7 @@ _TICKS: dict[int, int] = {
     int(Opcode.DIV): 6,
     int(Opcode.MOD): 6,
     int(Opcode.EQ): 3,
+    int(Opcode.SLT): 3,
     int(Opcode.JMP): 2,
     int(Opcode.JZ): 4,
     int(Opcode.CALL): 4,
@@ -246,6 +247,13 @@ class Cpu:
                 x1 = self._pop()
                 y = self._pop()
                 self._push(1 if (y & 0xFFFFFFFF) == (x1 & 0xFFFFFFFF) else 0)
+                self.pc = next_pc
+            case x if x == Opcode.SLT:
+                b = self._pop()
+                a = self._pop()
+                self._push(
+                    1 if _signed32(a & 0xFFFFFFFF) < _signed32(b & 0xFFFFFFFF) else 0,
+                )
                 self.pc = next_pc
             case x if x == Opcode.JMP:
                 target = operand & OPERAND_MASK

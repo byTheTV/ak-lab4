@@ -28,6 +28,7 @@ class Opcode(IntEnum):
     DIV = 0x13
     MOD = 0x14
     EQ = 0x15
+    SLT = 0x16  # signed: pop b, pop a; push 1 если a < b, иначе 0
     JMP = 0x20
     JZ = 0x21
     CALL = 0x22

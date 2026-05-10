@@ -359,6 +359,47 @@ def _emit(
                     pack_word(Opcode.DUP, 0),
                     pack_word(Opcode.OUT, int(Port.DATA_OUT)),
                 ]
+            if head.name == "load":
+                if len(args) != 1:
+                    raise CodegenError("load: один аргумент — адрес слова в DM")
+                addr_c = _emit(
+                    args[0],
+                    global_slots,
+                    pc0,
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                return addr_c + [pack_word(Opcode.LOAD, 0)]
+            if head.name == "store":
+                if len(args) != 2:
+                    raise CodegenError("store: адрес и значение")
+                addr_c = _emit(
+                    args[0],
+                    global_slots,
+                    pc0,
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                val_c = _emit(
+                    args[1],
+                    global_slots,
+                    pc0 + len(addr_c),
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                return addr_c + val_c + [
+                    pack_word(Opcode.STORE, 0),
+                    pack_word(Opcode.PUSH_IMM, 0),
+                ]
             if head.name == "setq":
                 if len(args) != 2:
                     raise CodegenError("setq: два аргумента — имя и выражение")
@@ -432,6 +473,54 @@ def _emit(
                     + [pack_word(Opcode.JMP, end_pc)]
                     + else_c
                 )
+            if head.name == "<":
+                if len(args) != 2:
+                    raise CodegenError("< — ровно два аргумента")
+                left = _emit(
+                    args[0],
+                    global_slots,
+                    pc0,
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                right = _emit(
+                    args[1],
+                    global_slots,
+                    pc0 + len(left),
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                return left + right + [pack_word(Opcode.SLT, 0)]
+            if head.name == ">":
+                if len(args) != 2:
+                    raise CodegenError("> — ровно два аргумента")
+                bl = _emit(
+                    args[1],
+                    global_slots,
+                    pc0,
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                ar = _emit(
+                    args[0],
+                    global_slots,
+                    pc0 + len(bl),
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                return bl + ar + [pack_word(Opcode.SLT, 0)]
             if head.name in ("eq", "="):
                 if len(args) != 2:
                     raise CodegenError("eq / = — ровно два аргумента")
@@ -619,6 +708,10 @@ def _handler_needs_drop_before_ret(body: Expr) -> bool:
             "mod",
             "eq",
             "=",
+            "<",
+            ">",
+            "load",
+            "store",
             "setq",
         ):
             return True
