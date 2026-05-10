@@ -1,7 +1,8 @@
-"""Общая логика golden: та же цепочка, что CLI, но без subprocess — сравнение с эталоном по out_bytes."""
+"""Golden: та же цепочка, что CLI (без subprocess); эталон сравниваем с ``Cpu.out_bytes``."""
 
 from __future__ import annotations
 
+from collections import deque
 from pathlib import Path
 
 from ak_lab4.cpu import Cpu, init_memory_from_segments, run_program
@@ -13,13 +14,18 @@ GOLDEN_ROOT = REPO_ROOT / "golden"
 
 
 def run_case(case: str, *, max_ticks: int = 10_000_000) -> Cpu:
-    """Скомпилировать ``golden/<case>/source.lisp``, исполнить до HALT."""
+    """Скомпилировать ``golden/<case>/source.lisp``, исполнить до HALT.
+
+    Если есть ``golden/<case>/input.txt``, байты подаются в ``Cpu.input_queue`` (порт DATA_IN).
+    """
     base = GOLDEN_ROOT / case
     src = (base / "source.lisp").read_text(encoding="utf-8")
     forms = parse_many(src)
     words = compile_forms(forms)
     im, dm = init_memory_from_segments(words, [])
-    cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE)
+    inp_path = base / "input.txt"
+    queue: deque[int] = deque(inp_path.read_bytes()) if inp_path.is_file() else deque()
+    cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, input_queue=queue)
     run_program(cpu, max_ticks=max_ticks)
     assert cpu.halted
     return cpu

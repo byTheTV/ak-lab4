@@ -1,0 +1,10 @@
+; Golden cat: копирование stdin → stdout через порты (рекурсия, EOF = -1).
+
+(defun cat ()
+  (progn
+    (setq c (in))
+    (if (= c -1)
+        (nop)
+        (progn (out c) (cat)))))
+
+(cat)
