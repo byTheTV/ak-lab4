@@ -396,10 +396,14 @@ def _emit(
                     param_slot_addr,
                     string_addrs,
                 )
-                return addr_c + val_c + [
-                    pack_word(Opcode.STORE, 0),
-                    pack_word(Opcode.PUSH_IMM, 0),
-                ]
+                return (
+                    addr_c
+                    + val_c
+                    + [
+                        pack_word(Opcode.STORE, 0),
+                        pack_word(Opcode.PUSH_IMM, 0),
+                    ]
+                )
             if head.name == "setq":
                 if len(args) != 2:
                     raise CodegenError("setq: два аргумента — имя и выражение")
@@ -850,9 +854,7 @@ def _compile_mains_interrupts(
     main_expr = mains[0] if len(mains) == 1 else SList((Symbol("progn"),) + mains)
 
     words: list[int] = [pack_word(Opcode.JMP, 0)] + [pack_word(Opcode.JMP, 0)] * NUM_IRQ_LINES
-    words.extend(
-        _emit(main_expr, global_slots, main_start, None, None, None, None, string_addrs)
-    )
+    words.extend(_emit(main_expr, global_slots, main_start, None, None, None, None, string_addrs))
     words.append(pack_word(Opcode.HALT, 0))
     words[0] = pack_word(Opcode.JMP, main_start)
 
@@ -878,9 +880,9 @@ def compile_program(expr: Expr) -> CompiledProgram:
     data_words, str_addr = _layout_pstr(strings)
     slot_base = len(data_words)
     global_slots, _ = _collect_bindings((expr,), slot_base=slot_base)
-    code = (
-        _emit(expr, global_slots, 0, None, None, None, None, str_addr) + [pack_word(Opcode.HALT, 0)]
-    )
+    code = _emit(expr, global_slots, 0, None, None, None, None, str_addr) + [
+        pack_word(Opcode.HALT, 0)
+    ]
     return CompiledProgram(code=code, data=data_words)
 
 
@@ -940,8 +942,7 @@ def compile_forms(forms: tuple[Expr, ...]) -> CompiledProgram:
         return compile_program(mains_only[0])
     wrapped = SList((Symbol("progn"),) + mains_only)
     global_slots, _ = _collect_bindings(mains_only, slot_base=slot_base)
-    code = (
-        _emit(wrapped, global_slots, 0, None, None, None, None, str_addr)
-        + [pack_word(Opcode.HALT, 0)]
-    )
+    code = _emit(wrapped, global_slots, 0, None, None, None, None, str_addr) + [
+        pack_word(Opcode.HALT, 0)
+    ]
     return CompiledProgram(code=code, data=data_words)
