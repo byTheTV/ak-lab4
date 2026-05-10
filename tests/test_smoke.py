@@ -1,4 +1,4 @@
-"""Минимальная проверка пакета. Интеграционные golden — см. ``test_golden_phase_a.py``."""
+"""минимальный smoke; golden — в test_golden_phase_a"""
 
 from ak_lab4 import __version__
 

@@ -1,4 +1,4 @@
-"""Цепочка: исходник .lisp → CLI транслятора → code.bin/data.bin → CLI симулятора с --input."""
+"""исходник → транслятор → code/data → симулятор с --input"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from ak_lab4.translator.cli import main as translator_main
 
 
 def test_in_port_roundtrip_via_cli(tmp_path: Path) -> None:
-    """Программа только (in): байт из файла --input оказывается на вершине стека."""
+    """только (in): байт из --input на вершине стека"""
     src = tmp_path / "prog.lisp"
     src.write_text("(in)\n", encoding="utf-8")
     code = tmp_path / "code.bin"
@@ -23,7 +23,7 @@ def test_in_port_roundtrip_via_cli(tmp_path: Path) -> None:
     inp.write_bytes(bytes([99]))
 
     assert translator_main([str(src), "-o", str(code), "--data-out", str(data)]) == 0
-    assert load_words_le(code) == compile_program(parse("(in)"))
+    assert load_words_le(code) == compile_program(parse("(in)")).code
 
     rc = simulator_main([str(code), str(data), "--input", str(inp), "--max-ticks", "100000"])
     assert rc == 0

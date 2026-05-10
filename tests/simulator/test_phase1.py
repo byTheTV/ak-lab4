@@ -29,7 +29,7 @@ def test_run_add_then_halt(tmp_path: Path) -> None:
 
 
 def test_push_imm_sign_extended(tmp_path: Path) -> None:
-    """−1 как 24-бит знаковое поле: 0xFFFFFF."""
+    """−1 в 24-бит поле — машинное слово 0xFFFFFF"""
     words = [
         pack_word(Opcode.PUSH_IMM, 0xFFFFFF),  # -1
         pack_word(Opcode.HALT, 0),

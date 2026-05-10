@@ -9,7 +9,7 @@ from ak_lab4.translator.codegen import CodegenError, compile_program
 
 
 def test_setq_stores_and_returns_value() -> None:
-    words = compile_program(parse("(setq n 100)"))
+    words = compile_program(parse("(setq n 100)")).code
     im, dm = init_memory_from_segments(words, [])
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE)
     run_program(cpu, max_ticks=50_000)
@@ -20,7 +20,7 @@ def test_setq_stores_and_returns_value() -> None:
 
 
 def test_plus_with_inner_setq() -> None:
-    words = compile_program(parse("(+ (setq x 5) 3)"))
+    words = compile_program(parse("(+ (setq x 5) 3)")).code
     im, dm = init_memory_from_segments(words, [])
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE)
     run_program(cpu, max_ticks=50_000)
@@ -30,7 +30,7 @@ def test_plus_with_inner_setq() -> None:
 
 
 def test_nested_setq_assignment_value() -> None:
-    words = compile_program(parse("(setq a (setq b 2))"))
+    words = compile_program(parse("(setq a (setq b 2))")).code
     im, dm = init_memory_from_segments(words, [])
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE)
     run_program(cpu, max_ticks=50_000)

@@ -1,4 +1,4 @@
-"""Golden-сценарии фазы A — см. ``golden/<case>/`` и ``golden/README.md``."""
+"""golden фазы A — каталоги golden/<case>/"""
 
 from __future__ import annotations
 
@@ -7,7 +7,10 @@ import pytest
 from tests.golden_support import read_expected_output, run_case
 
 
-@pytest.mark.parametrize("case", ["hello", "cat", "hello_user_name"])
+@pytest.mark.parametrize(
+    "case",
+    ["hello", "cat", "hello_user_name", "pstr_two", "sort"],
+)
 def test_golden_program_output(case: str) -> None:
     cpu = run_case(case)
     assert bytes(cpu.out_bytes) == read_expected_output(case)

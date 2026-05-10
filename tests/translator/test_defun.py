@@ -6,7 +6,7 @@ from ak_lab4.translator import compile_forms, parse_many
 
 
 def _run_module(src: str) -> Cpu:
-    words = compile_forms(parse_many(src))
+    words = compile_forms(parse_many(src)).code
     im, dm = init_memory_from_segments(words, [])
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE)
     run_program(cpu, max_ticks=500_000)
@@ -26,7 +26,7 @@ def test_defun_calls_defun_below() -> None:
 
 
 def test_swap_ret_preserves_result_under_return_pc() -> None:
-    """После CALL стек [ret]; тело кладёт значение → SWAP → RET оставляет значение на стеке."""
+    """после CALL на стеке ret; значение функции — SWAP и RET не затирают"""
     cpu = _run_module("(defun x () (+ 9 9))(x)")
     assert cpu.dm[STACK_BASE] == 18
 
@@ -42,7 +42,7 @@ def test_defun_two_params() -> None:
 
 
 def test_defun_forward_call() -> None:
-    """Вызов функции, объявленной ниже по тексту."""
+    """вызов функции, которая объявлена ниже по тексту"""
     cpu = _run_module("(defun a () (b))(defun b () 1)(a)")
     assert cpu.dm[STACK_BASE] == 1
 
@@ -53,7 +53,7 @@ def test_defun_forward_call_with_param() -> None:
 
 
 def test_defun_body_implicit_progn() -> None:
-    """Несколько форм в теле defun — как progn: побочные эффекты, значение — последняя форма."""
+    """несколько форм в теле — как progn: эффекты по порядку, значение у последней"""
     src = "(defun f (x) (setq acc (+ acc x)) (+ acc 10))(setq acc 0)(f 3)"
     cpu = _run_module(src)
     assert cpu.dm[STACK_BASE] == 13

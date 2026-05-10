@@ -1,6 +1,8 @@
-"""Генерация машинных слов: arith, setq, if, eq, progn, in/out (порты), defun, CALL."""
+"""Генерация машинных слов: arith, setq, if, eq, progn, in/out (порты), defun, CALL"""
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 from ak_lab4.isa import NUM_IRQ_LINES, Opcode, Port, pack_word
 from ak_lab4.translator.ast import Expr, IntLit, SList, StrLit, Symbol
@@ -18,20 +20,30 @@ _ARITH: dict[str, Opcode] = {
 
 
 class CodegenError(ValueError):
-    """Неподдерживаемая конструкция или неверная арность."""
+    """Неподдерживаемая конструкция или неверная арность"""
+
+
+@dataclass
+class CompiledProgram:
+    """Гарвард: IM для кода, DM для pstr и слотов переменных"""
+
+    code: list[int]
+    data: list[int]
 
 
 def _check_imm24(v: int) -> int:
     if v < IMM24_MIN or v > IMM24_MAX:
-        msg = f"Литерал {v} вне диапазона 24-бит signed ({IMM24_MIN}…{IMM24_MAX})"
+        msg = f"число {v} вне 24-бит signed ({IMM24_MIN}…{IMM24_MAX})"
         raise CodegenError(msg)
     return v
 
 
 def _collect_bindings(
     forms: tuple[Expr, ...],
+    *,
+    slot_base: int = 0,
 ) -> tuple[dict[str, int], dict[tuple[str, str], int]]:
-    """Глобальные слоты setq + слоты параметров (fname, pname) → адрес DM."""
+    """глобальные setq и слоты (fname, pname) → адрес в DM"""
 
     order_setq: list[str] = []
 
@@ -64,7 +76,7 @@ def _collect_bindings(
         walk(f)
 
     global_slots: dict[str, int] = {}
-    nxt = 0
+    nxt = slot_base
     for nm in order_setq:
         if nm not in global_slots:
             global_slots[nm] = nxt
@@ -78,11 +90,52 @@ def _collect_bindings(
             for p in params:
                 key = (fname, p)
                 if key in param_slot:
-                    raise CodegenError(f"defun «{fname}»: повтор имени параметра «{p}»")
+                    raise CodegenError(f"defun «{fname}»: параметр «{p}» уже есть")
                 param_slot[key] = nxt
                 nxt += 1
 
     return global_slots, param_slot
+
+
+def _walk_collect_str_literals(e: Expr, seen: set[str], ordered: list[str]) -> None:
+    """первые вхождения уникальных строк по порядку обхода"""
+    match e:
+        case StrLit(s):
+            if s not in seen:
+                seen.add(s)
+                ordered.append(s)
+        case SList(items):
+            for it in items:
+                _walk_collect_str_literals(it, seen, ordered)
+        case _:
+            pass
+
+
+def _ordered_unique_strings_from_forms(forms: tuple[Expr, ...]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for f in forms:
+        _walk_collect_str_literals(f, seen, ordered)
+    return ordered
+
+
+def _layout_pstr(strings: list[str]) -> tuple[list[int], dict[str, int]]:
+    """слова [len][ord…]; база строки — адрес слова длины"""
+    data: list[int] = []
+    addr: dict[str, int] = {}
+    for s in strings:
+        if len(s) > IMM24_MAX:
+            msg = f"строка длиннее {IMM24_MAX} символов — так не разложить в память"
+            raise CodegenError(msg)
+        base = len(data)
+        addr[s] = base
+        data.append(len(s) & 0xFFFFFFFF)
+        for ch in s:
+            o = ord(ch)
+            if o > 0xFFFFFFFF:
+                raise CodegenError("символ не помещается в одно машинное слово")
+            data.append(o & 0xFFFFFFFF)
+    return data, addr
 
 
 def _slot_addr(
@@ -94,7 +147,7 @@ def _slot_addr(
         return param_scope[name]
     if name in global_slots:
         return global_slots[name]
-    raise CodegenError(f"Неизвестный символ «{name}»")
+    raise CodegenError(f"нет переменной «{name}»")
 
 
 def _is_defun_form(e: Expr) -> bool:
@@ -111,20 +164,20 @@ def _is_defun_form(e: Expr) -> bool:
 def _parse_defun_full(d: SList) -> tuple[str, tuple[str, ...], Expr]:
     if len(d.items) < 4:
         raise CodegenError(
-            "defun: ожидается (defun имя (параметры ...) выражение [выражение ...])",
+            "defun: нужно (defun имя (параметры) тело …)",
         )
     _kw, name_el, params_el, *body_forms = d.items
     if not isinstance(name_el, Symbol):
-        raise CodegenError("defun: имя функции должно быть символом")
+        raise CodegenError("defun: имя должно быть символом")
     if not isinstance(params_el, SList):
-        raise CodegenError("defun: список параметров должен быть в скобках")
+        raise CodegenError("defun: параметры — список в скобках")
     params: list[str] = []
     for item in params_el.items:
         if not isinstance(item, Symbol):
-            raise CodegenError("defun: каждый параметр — символ")
+            raise CodegenError("defun: каждый параметр — отдельный символ")
         params.append(item.name)
     if len(set(params)) != len(params):
-        raise CodegenError("defun: имена параметров должны быть различны")
+        raise CodegenError("defun: имена параметров не должны повторяться")
     if len(body_forms) == 1:
         body: Expr = body_forms[0]
     else:
@@ -144,12 +197,12 @@ def _is_interrupt_form(e: Expr) -> bool:
 def _parse_interrupt_form(e: SList) -> tuple[int, Expr]:
     _kw, irq_el, *rest = e.items
     if not isinstance(irq_el, IntLit):
-        raise CodegenError("interrupt: второй элемент — номер линии (целый литерал)")
+        raise CodegenError("interrupt: второй аргумент — номер линии (целое)")
     irq = irq_el.value
     if irq < 0 or irq >= NUM_IRQ_LINES:
-        raise CodegenError(f"interrupt: номер линии 0…{NUM_IRQ_LINES - 1}")
+        raise CodegenError(f"interrupt: линия только 0…{NUM_IRQ_LINES - 1}")
     if not rest:
-        raise CodegenError("interrupt: нужно тело обработчика")
+        raise CodegenError("interrupt: нужно тело после номера линии")
     if len(rest) == 1:
         body: Expr = rest[0]
     else:
@@ -177,7 +230,7 @@ def _split_defuns_first(forms: tuple[Expr, ...]) -> tuple[tuple[SList, ...], tup
     for f in forms:
         if _is_defun_form(f):
             if stage == "main":
-                raise CodegenError("defun должен быть объявлен до основного кода (вызовов)")
+                raise CodegenError("сначала все defun, потом основной код")
             defuns.append(f)  # type: ignore[arg-type]
         else:
             stage = "main"
@@ -195,10 +248,11 @@ def _emit_n_ary(
     param_scope: dict[str, int] | None,
     func_param_sig: dict[str, tuple[str, ...]] | None,
     param_slot_addr: dict[tuple[str, str], int] | None,
+    string_addrs: dict[str, int] | None,
 ) -> list[int]:
     if len(args) < 2:
-        raise CodegenError(f"{name} требует минимум два аргумента")
-    ctx = (funcs, param_scope, func_param_sig, param_slot_addr)
+        raise CodegenError(f"«{name}»: нужно минимум два аргумента")
+    ctx = (funcs, param_scope, func_param_sig, param_slot_addr, string_addrs)
     out: list[int] = []
     cur = pc0
     out.extend(_emit(args[0], global_slots, cur, *ctx))
@@ -221,15 +275,19 @@ def _emit(
     param_scope: dict[str, int] | None = None,
     func_param_sig: dict[str, tuple[str, ...]] | None = None,
     param_slot_addr: dict[tuple[str, str], int] | None = None,
+    string_addrs: dict[str, int] | None = None,
 ) -> list[int]:
-    """func_param_sig / param_slot_addr нужны для вызовов с аргументами."""
+    """вызовы с аргументами — нужны func_param_sig и param_slot_addr"""
 
     match e:
         case IntLit(v):
             v2 = _check_imm24(v)
             return [pack_word(Opcode.PUSH_IMM, v2)]
-        case StrLit(_):
-            raise CodegenError("Строковые литералы пока не генерируются")
+        case StrLit(s):
+            if string_addrs is None or s not in string_addrs:
+                raise CodegenError("строка не из пула (баг компилятора)")
+            base = string_addrs[s]
+            return [pack_word(Opcode.PUSH_IMM, _check_imm24(base))]
         case Symbol(name):
             addr = _slot_addr(name, global_slots, param_scope)
             return [
@@ -238,21 +296,21 @@ def _emit(
             ]
         case SList(items):
             if not items:
-                raise CodegenError("Пустой список () недопустим как выражение")
+                raise CodegenError("пустой список () нельзя как выражение")
             head, *args = items
             if not isinstance(head, Symbol):
-                raise CodegenError("Вызов: голова списка должна быть символом")
+                raise CodegenError("вызов: слева должен быть символ")
             if head.name == "drop":
                 if args:
-                    raise CodegenError("drop не принимает аргументов")
+                    raise CodegenError("у drop не бывает аргументов")
                 return [pack_word(Opcode.DROP, 0)]
             if head.name == "nop":
                 if args:
-                    raise CodegenError("nop не принимает аргументов")
+                    raise CodegenError("у nop не бывает аргументов")
                 return [pack_word(Opcode.NOP, 0)]
             if head.name == "progn":
                 if not args:
-                    raise CodegenError("progn требует хотя бы одно выражение")
+                    raise CodegenError("progn: хотя бы одна форма внутри")
                 parts: list[int] = []
                 cur = pc0
                 for i, ex in enumerate(args):
@@ -264,6 +322,7 @@ def _emit(
                         param_scope,
                         func_param_sig,
                         param_slot_addr,
+                        string_addrs,
                     )
                     parts.extend(segment)
                     cur = pc0 + len(parts)
@@ -273,19 +332,19 @@ def _emit(
                 return parts
             if head.name == "ei":
                 if args:
-                    raise CodegenError("ei не принимает аргументов")
+                    raise CodegenError("ei без аргументов")
                 return [pack_word(Opcode.EI, 0)]
             if head.name == "di":
                 if args:
-                    raise CodegenError("di не принимает аргументов")
+                    raise CodegenError("di без аргументов")
                 return [pack_word(Opcode.CLI, 0)]
             if head.name == "in":
                 if args:
-                    raise CodegenError("in не принимает аргументов")
+                    raise CodegenError("in без аргументов")
                 return [pack_word(Opcode.IN, int(Port.DATA_IN))]
             if head.name == "out":
                 if len(args) != 1:
-                    raise CodegenError("out ожидает ровно один аргумент (значение для порта)")
+                    raise CodegenError("out: один аргумент — значение для порта")
                 val_c = _emit(
                     args[0],
                     global_slots,
@@ -294,17 +353,63 @@ def _emit(
                     param_scope,
                     func_param_sig,
                     param_slot_addr,
+                    string_addrs,
                 )
                 return val_c + [
                     pack_word(Opcode.DUP, 0),
                     pack_word(Opcode.OUT, int(Port.DATA_OUT)),
                 ]
+            if head.name == "load":
+                if len(args) != 1:
+                    raise CodegenError("load: один аргумент — адрес слова в DM")
+                addr_c = _emit(
+                    args[0],
+                    global_slots,
+                    pc0,
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                return addr_c + [pack_word(Opcode.LOAD, 0)]
+            if head.name == "store":
+                if len(args) != 2:
+                    raise CodegenError("store: адрес и значение")
+                addr_c = _emit(
+                    args[0],
+                    global_slots,
+                    pc0,
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                val_c = _emit(
+                    args[1],
+                    global_slots,
+                    pc0 + len(addr_c),
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                return (
+                    addr_c
+                    + val_c
+                    + [
+                        pack_word(Opcode.STORE, 0),
+                        pack_word(Opcode.PUSH_IMM, 0),
+                    ]
+                )
             if head.name == "setq":
                 if len(args) != 2:
-                    raise CodegenError("setq ожидает ровно два аргумента (имя и выражение)")
+                    raise CodegenError("setq: два аргумента — имя и выражение")
                 sym_el, rhs = args
                 if not isinstance(sym_el, Symbol):
-                    raise CodegenError("setq: первый аргумент должен быть символом")
+                    raise CodegenError("setq: первым должно быть имя (символ)")
                 addr = _slot_addr(sym_el.name, global_slots, param_scope)
                 head_w = [pack_word(Opcode.PUSH_IMM, _check_imm24(addr))]
                 rhs_start = pc0 + 1
@@ -318,6 +423,7 @@ def _emit(
                         param_scope,
                         func_param_sig,
                         param_slot_addr,
+                        string_addrs,
                     )
                     + [
                         pack_word(Opcode.STORE, 0),
@@ -327,7 +433,7 @@ def _emit(
                 )
             if head.name == "if":
                 if len(args) != 3:
-                    raise CodegenError("if ожидает ровно три аргумента (условие then else)")
+                    raise CodegenError("if: три аргумента — условие, then, else")
                 pred_e, then_e, else_e = args
                 pred_c = _emit(
                     pred_e,
@@ -337,6 +443,7 @@ def _emit(
                     param_scope,
                     func_param_sig,
                     param_slot_addr,
+                    string_addrs,
                 )
                 jz_pc = pc0 + len(pred_c)
                 then_start = jz_pc + 1
@@ -348,6 +455,7 @@ def _emit(
                     param_scope,
                     func_param_sig,
                     param_slot_addr,
+                    string_addrs,
                 )
                 jmp_pc = then_start + len(then_c)
                 else_start = jmp_pc + 1
@@ -359,6 +467,7 @@ def _emit(
                     param_scope,
                     func_param_sig,
                     param_slot_addr,
+                    string_addrs,
                 )
                 end_pc = else_start + len(else_c)
                 return (
@@ -368,9 +477,9 @@ def _emit(
                     + [pack_word(Opcode.JMP, end_pc)]
                     + else_c
                 )
-            if head.name in ("eq", "="):
+            if head.name == "<":
                 if len(args) != 2:
-                    raise CodegenError("eq и = ожидают ровно два аргумента")
+                    raise CodegenError("< — ровно два аргумента")
                 left = _emit(
                     args[0],
                     global_slots,
@@ -379,6 +488,7 @@ def _emit(
                     param_scope,
                     func_param_sig,
                     param_slot_addr,
+                    string_addrs,
                 )
                 right = _emit(
                     args[1],
@@ -388,6 +498,55 @@ def _emit(
                     param_scope,
                     func_param_sig,
                     param_slot_addr,
+                    string_addrs,
+                )
+                return left + right + [pack_word(Opcode.SLT, 0)]
+            if head.name == ">":
+                if len(args) != 2:
+                    raise CodegenError("> — ровно два аргумента")
+                bl = _emit(
+                    args[1],
+                    global_slots,
+                    pc0,
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                ar = _emit(
+                    args[0],
+                    global_slots,
+                    pc0 + len(bl),
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                return bl + ar + [pack_word(Opcode.SLT, 0)]
+            if head.name in ("eq", "="):
+                if len(args) != 2:
+                    raise CodegenError("eq / = — ровно два аргумента")
+                left = _emit(
+                    args[0],
+                    global_slots,
+                    pc0,
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                right = _emit(
+                    args[1],
+                    global_slots,
+                    pc0 + len(left),
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
                 )
                 return left + right + [pack_word(Opcode.EQ, 0)]
             op = _ARITH.get(head.name)
@@ -402,14 +561,15 @@ def _emit(
                     param_scope,
                     func_param_sig,
                     param_slot_addr,
+                    string_addrs,
                 )
             if funcs is not None and head.name in funcs:
                 if func_param_sig is None or param_slot_addr is None:
-                    raise CodegenError("внутренняя ошибка: нет таблицы параметров для CALL")
+                    raise CodegenError("внутри компилятора: нет таблицы параметров для CALL")
                 sig = func_param_sig[head.name]
                 if len(args) != len(sig):
                     raise CodegenError(
-                        f"«{head.name}»: ожидается {len(sig)} арг., передано {len(args)}",
+                        f"«{head.name}»: нужно {len(sig)} аргументов, передано {len(args)}",
                     )
                 out: list[int] = []
                 cur = pc0
@@ -426,6 +586,7 @@ def _emit(
                             param_scope,
                             func_param_sig,
                             param_slot_addr,
+                            string_addrs,
                         )
                     )
                     cur = pc0 + len(out)
@@ -433,17 +594,23 @@ def _emit(
                     cur = pc0 + len(out)
                 out.append(pack_word(Opcode.CALL, funcs[head.name]))
                 return out
-            raise CodegenError(f"Неизвестная форма: ({head.name} …)")
+            raise CodegenError(f"не знаю форму ({head.name} …)")
 
 
-def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> list[int]:
+def _compile_with_defuns(
+    defuns: tuple[SList, ...],
+    mains: tuple[Expr, ...],
+    *,
+    slot_base: int,
+    string_addrs: dict[str, int],
+) -> list[int]:
     """Два прохода: сначала длины тел (CALL с фиктивным 0), затем раскладка и эмит с реальными PC.
 
     Так вызовы функций, объявленных ниже в файле, получают правильный адрес, и if/jz/jmp
     используют итоговый start_pc функции.
     """
     all_forms = tuple(defuns) + mains
-    global_slots, param_slot_addr = _collect_bindings(all_forms)
+    global_slots, param_slot_addr = _collect_bindings(all_forms, slot_base=slot_base)
 
     ordered: list[tuple[str, Expr]] = []
     seen_names: set[str] = set()
@@ -451,7 +618,7 @@ def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> 
     for d in defuns:
         name, params, body = _parse_defun_full(d)
         if name in seen_names:
-            raise CodegenError(f"Повторное определение функции «{name}»")
+            raise CodegenError(f"функция «{name}» уже объявлена")
         seen_names.add(name)
         func_param_sig[name] = params
         ordered.append((name, body))
@@ -470,6 +637,7 @@ def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> 
             param_scope,
             func_param_sig,
             param_slot_addr,
+            string_addrs,
         )
         lens[name] = len(chunk)
 
@@ -495,6 +663,7 @@ def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> 
                 param_scope,
                 func_param_sig,
                 param_slot_addr,
+                string_addrs,
             )
         )
         words.append(pack_word(Opcode.SWAP, 0))
@@ -512,6 +681,7 @@ def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> 
             None,
             func_param_sig,
             param_slot_addr,
+            string_addrs,
         )
     )
     words.append(pack_word(Opcode.HALT, 0))
@@ -519,7 +689,7 @@ def _compile_with_defuns(defuns: tuple[SList, ...], mains: tuple[Expr, ...]) -> 
 
 
 def _handler_needs_drop_before_ret(body: Expr) -> bool:
-    """ISR: последняя форма оставила значение на стеке — нужен DROP перед RET."""
+    """если последняя форма ISR что-то положила на стек — перед RET нужен DROP"""
 
     def last_form(ex: Expr) -> Expr:
         if isinstance(ex, SList) and ex.items:
@@ -529,6 +699,8 @@ def _handler_needs_drop_before_ret(body: Expr) -> bool:
         return ex
 
     lf = last_form(body)
+    if isinstance(lf, StrLit):
+        return True
     if isinstance(lf, SList) and lf.items:
         h = lf.items[0]
         if isinstance(h, Symbol) and h.name in (
@@ -540,6 +712,10 @@ def _handler_needs_drop_before_ret(body: Expr) -> bool:
             "mod",
             "eq",
             "=",
+            "<",
+            ">",
+            "load",
+            "store",
             "setq",
         ):
             return True
@@ -550,11 +726,14 @@ def _compile_with_defuns_interrupts(
     defuns: tuple[SList, ...],
     mains: tuple[Expr, ...],
     irq_handlers: dict[int, Expr],
+    *,
+    slot_base: int,
+    string_addrs: dict[str, int],
 ) -> list[int]:
-    """_compile_with_defuns + векторы IM[1..N]=jmp handler; после HALT — обработчики и RET."""
+    """как _compile_with_defuns, плюс IM[1..N]=jmp на handler; после HALT — ISR и RET"""
     irq_vals = tuple(irq_handlers.values())
     all_forms = tuple(defuns) + mains + irq_vals
-    global_slots, param_slot_addr = _collect_bindings(all_forms)
+    global_slots, param_slot_addr = _collect_bindings(all_forms, slot_base=slot_base)
 
     ordered: list[tuple[str, Expr]] = []
     seen_names: set[str] = set()
@@ -562,7 +741,7 @@ def _compile_with_defuns_interrupts(
     for d in defuns:
         name, params, body = _parse_defun_full(d)
         if name in seen_names:
-            raise CodegenError(f"Повторное определение функции «{name}»")
+            raise CodegenError(f"функция «{name}» уже объявлена")
         seen_names.add(name)
         func_param_sig[name] = params
         ordered.append((name, body))
@@ -581,6 +760,7 @@ def _compile_with_defuns_interrupts(
             param_scope,
             func_param_sig,
             param_slot_addr,
+            string_addrs,
         )
         lens[name] = len(chunk)
 
@@ -607,6 +787,7 @@ def _compile_with_defuns_interrupts(
                 param_scope,
                 func_param_sig,
                 param_slot_addr,
+                string_addrs,
             )
         )
         words.append(pack_word(Opcode.SWAP, 0))
@@ -624,6 +805,7 @@ def _compile_with_defuns_interrupts(
             None,
             func_param_sig,
             param_slot_addr,
+            string_addrs,
         )
     )
     words.append(pack_word(Opcode.HALT, 0))
@@ -645,6 +827,7 @@ def _compile_with_defuns_interrupts(
                 None,
                 func_param_sig,
                 param_slot_addr,
+                string_addrs,
             )
             + extra
             + [pack_word(Opcode.RET, 0)]
@@ -659,16 +842,19 @@ def _compile_with_defuns_interrupts(
 def _compile_mains_interrupts(
     mains: tuple[Expr, ...],
     irq_handlers: dict[int, Expr],
+    *,
+    slot_base: int,
+    string_addrs: dict[str, int],
 ) -> list[int]:
     irq_vals = tuple(irq_handlers.values())
     all_forms = tuple(mains) + irq_vals
-    global_slots, _ = _collect_bindings(all_forms)
+    global_slots, _ = _collect_bindings(all_forms, slot_base=slot_base)
     header_slots = 1 + NUM_IRQ_LINES
     main_start = header_slots
     main_expr = mains[0] if len(mains) == 1 else SList((Symbol("progn"),) + mains)
 
     words: list[int] = [pack_word(Opcode.JMP, 0)] + [pack_word(Opcode.JMP, 0)] * NUM_IRQ_LINES
-    words.extend(_emit(main_expr, global_slots, main_start, None, None, None, None))
+    words.extend(_emit(main_expr, global_slots, main_start, None, None, None, None, string_addrs))
     words.append(pack_word(Opcode.HALT, 0))
     words[0] = pack_word(Opcode.JMP, main_start)
 
@@ -679,7 +865,7 @@ def _compile_mains_interrupts(
         hbody = irq_handlers[irq]
         extra = [pack_word(Opcode.DROP, 0)] if _handler_needs_drop_before_ret(hbody) else []
         words.extend(
-            _emit(hbody, global_slots, entry, None, None, None, None)
+            _emit(hbody, global_slots, entry, None, None, None, None, string_addrs)
             + extra
             + [pack_word(Opcode.RET, 0)]
         )
@@ -688,16 +874,26 @@ def _compile_mains_interrupts(
     return words
 
 
-def compile_program(expr: Expr) -> list[int]:
-    """Одно выражение-программа: код и завершающий HALT."""
-    global_slots, _ = _collect_bindings((expr,))
-    return _emit(expr, global_slots, 0, None, None, None, None) + [pack_word(Opcode.HALT, 0)]
+def compile_program(expr: Expr) -> CompiledProgram:
+    """одна верхнеуровневая форма — код, pstr в DM, HALT в конце"""
+    strings = _ordered_unique_strings_from_forms((expr,))
+    data_words, str_addr = _layout_pstr(strings)
+    slot_base = len(data_words)
+    global_slots, _ = _collect_bindings((expr,), slot_base=slot_base)
+    code = _emit(expr, global_slots, 0, None, None, None, None, str_addr) + [
+        pack_word(Opcode.HALT, 0)
+    ]
+    return CompiledProgram(code=code, data=data_words)
 
 
-def compile_forms(forms: tuple[Expr, ...]) -> list[int]:
-    """Несколько верхнеуровневых форм; defun / опционально trailing (interrupt n …)."""
+def compile_forms(forms: tuple[Expr, ...]) -> CompiledProgram:
+    """несколько форм, defun и опционально хвост (interrupt n …)"""
     if not forms:
-        raise CodegenError("Нет форм для компиляции")
+        raise CodegenError("нечего компилировать — файл пустой")
+    strings = _ordered_unique_strings_from_forms(forms)
+    data_words, str_addr = _layout_pstr(strings)
+    slot_base = len(data_words)
+
     defuns, mains_tail = _split_defuns_first(forms)
     mains_only, interrupt_forms = _split_trailing_interrupts(mains_tail)
 
@@ -707,24 +903,46 @@ def compile_forms(forms: tuple[Expr, ...]) -> list[int]:
             assert isinstance(form, SList)
             irq, body = _parse_interrupt_form(form)
             if irq in irq_handlers:
-                raise CodegenError(f"interrupt {irq}: повторное объявление")
+                raise CodegenError(f"interrupt {irq} объявлен дважды")
             irq_handlers[irq] = body
         if defuns:
             if not mains_only:
-                raise CodegenError("После defun нужен основной код до обработчиков interrupt")
-            return _compile_with_defuns_interrupts(defuns, mains_only, irq_handlers)
+                raise CodegenError("между defun и interrupt нужен основной код")
+            code = _compile_with_defuns_interrupts(
+                defuns,
+                mains_only,
+                irq_handlers,
+                slot_base=slot_base,
+                string_addrs=str_addr,
+            )
+            return CompiledProgram(code=code, data=data_words)
         if not mains_only:
-            raise CodegenError("Нужна основная программа перед (interrupt …)")
-        return _compile_mains_interrupts(mains_only, irq_handlers)
+            raise CodegenError("перед (interrupt …) должна быть основная программа")
+        code = _compile_mains_interrupts(
+            mains_only,
+            irq_handlers,
+            slot_base=slot_base,
+            string_addrs=str_addr,
+        )
+        return CompiledProgram(code=code, data=data_words)
 
     if defuns:
         if not mains_only:
-            raise CodegenError("После defun нужно хотя бы одно основное выражение")
-        return _compile_with_defuns(defuns, mains_only)
+            raise CodegenError("после defun нужна хотя бы одна форма основного кода")
+        code = _compile_with_defuns(
+            defuns,
+            mains_only,
+            slot_base=slot_base,
+            string_addrs=str_addr,
+        )
+        return CompiledProgram(code=code, data=data_words)
     if len(forms) == 1:
         return compile_program(forms[0])
     if len(mains_only) == 1:
         return compile_program(mains_only[0])
     wrapped = SList((Symbol("progn"),) + mains_only)
-    global_slots, _ = _collect_bindings(mains_only)
-    return _emit(wrapped, global_slots, 0, None, None, None, None) + [pack_word(Opcode.HALT, 0)]
+    global_slots, _ = _collect_bindings(mains_only, slot_base=slot_base)
+    code = _emit(wrapped, global_slots, 0, None, None, None, None, str_addr) + [
+        pack_word(Opcode.HALT, 0)
+    ]
+    return CompiledProgram(code=code, data=data_words)

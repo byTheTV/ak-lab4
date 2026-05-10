@@ -1,10 +1,11 @@
-"""Транслятор Lisp: лексер, парсер, AST, минимальная генерация кода."""
+"""Лисп-транслятор: лексер, парсер, AST, codegen"""
 
 from ak_lab4.translator.ast import Expr, IntLit, SList, StrLit, Symbol, expr_repr
 from ak_lab4.translator.codegen import (
     IMM24_MAX,
     IMM24_MIN,
     CodegenError,
+    CompiledProgram,
     compile_forms,
     compile_program,
 )
@@ -13,6 +14,7 @@ from ak_lab4.translator.parser import ParseError, parse, parse_file, parse_many
 
 __all__ = [
     "CodegenError",
+    "CompiledProgram",
     "Expr",
     "IMM24_MAX",
     "IMM24_MIN",

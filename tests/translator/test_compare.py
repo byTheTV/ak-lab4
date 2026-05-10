@@ -17,26 +17,41 @@ def _run(src: str) -> Cpu:
     return cpu
 
 
-def test_eq_equal_ints() -> None:
-    cpu = _run("(eq 3 3)")
+def test_lt_true() -> None:
+    cpu = _run("(< 1 5)")
     assert cpu.dm[STACK_BASE] == 1
 
 
-def test_eq_not_equal() -> None:
-    cpu = _run("(eq 1 2)")
+def test_lt_false() -> None:
+    cpu = _run("(< 9 2)")
     assert cpu.dm[STACK_BASE] == 0
 
 
-def test_equals_alias() -> None:
-    cpu = _run("(= 5 5)")
+def test_lt_signed_negative() -> None:
+    cpu = _run("(< -1 5)")
     assert cpu.dm[STACK_BASE] == 1
 
 
-def test_eq_in_if_predicate() -> None:
-    cpu = _run("(if (eq 2 2) 9 8)")
-    assert cpu.dm[STACK_BASE] == 9
+def test_gt_true() -> None:
+    cpu = _run("(> 8 3)")
+    assert cpu.dm[STACK_BASE] == 1
 
 
-def test_eq_bad_arity() -> None:
+def test_gt_false() -> None:
+    cpu = _run("(> 1 1)")
+    assert cpu.dm[STACK_BASE] == 0
+
+
+def test_gt_signed() -> None:
+    cpu = _run("(> 0 -3)")
+    assert cpu.dm[STACK_BASE] == 1
+
+
+def test_lt_if() -> None:
+    cpu = _run("(if (< 2 9) 11 22)")
+    assert cpu.dm[STACK_BASE] == 11
+
+
+def test_compare_bad_arity() -> None:
     with pytest.raises(CodegenError):
-        compile_program(parse("(eq 1)"))
+        compile_program(parse("(< 1)"))

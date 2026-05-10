@@ -22,12 +22,12 @@ def test_load_schedule_json(tmp_path) -> None:
 
 
 def test_irq_schedule_delivers_to_handler_via_in() -> None:
-    """Расписание и обработчик (interrupt); байты не из stdin-очереди."""
+    """trap по расписанию; первый IN в ISR берёт байт с линии, не из stdin"""
     words = compile_forms(
         parse_many(
             "(nop)\n(interrupt 0 (in))\n",
         ),
-    )
+    ).code
     sched = (IrqScheduleEvent(0, 0, 66),)
     im, dm = init_memory_from_segments(words, [])
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
@@ -37,12 +37,12 @@ def test_irq_schedule_delivers_to_handler_via_in() -> None:
 
 
 def test_irq_tick_after_nop_before_halt() -> None:
-    """Событие на такте 3 — после JMP (2 т.) и NOP (1 т.), обработчик до встроенного HALT."""
+    """событие на такте 3: JMP 2 т + NOP 1 т, потом обработчик до HALT"""
     words = compile_forms(
         parse_many(
             "(nop)\n(interrupt 0 (in))\n",
         ),
-    )
+    ).code
     sched = (IrqScheduleEvent(3, 0, 99),)
     im, dm = init_memory_from_segments(words, [])
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
@@ -52,8 +52,8 @@ def test_irq_tick_after_nop_before_halt() -> None:
 
 
 def test_log_prefix_isr(tmp_path) -> None:
-    """Журнал помечает режим USR/ISR (см. ТЗ: видно, в прерывании выполнение или нет)."""
-    words = compile_forms(parse_many("(nop)\n(interrupt 0 (nop))\n"))
+    """в логе видно USR vs ISR"""
+    words = compile_forms(parse_many("(nop)\n(interrupt 0 (nop))\n")).code
     im, dm = init_memory_from_segments(words, [])
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=(IrqScheduleEvent(1, 0, 0),))
     log = tmp_path / "x.log"

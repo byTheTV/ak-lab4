@@ -1,4 +1,4 @@
-"""Расписание прерываний/ввода по глобальным тактам симуляции (trap в смысле ТЗ)."""
+"""Расписание IRQ/trap по глобальному счётчику тактов симуляции"""
 
 from __future__ import annotations
 
@@ -11,11 +11,11 @@ from ak_lab4.isa import NUM_IRQ_LINES
 
 @dataclass(frozen=True)
 class IrqScheduleEvent:
-    """Событие: на суммарном такте ``tick`` приходит значение на линию ``irq``."""
+    """На такте tick значение на линии irq"""
 
     tick: int
     irq: int
-    value: int  # байт 0…255
+    value: int  # 0…255
 
 
 def _byte_from_json_value(v: object) -> int:
@@ -27,28 +27,25 @@ def _byte_from_json_value(v: object) -> int:
         return v & 0xFF
     if isinstance(v, float):
         return int(v) & 0xFF
-    msg = f"Расписание: value ожидается str/int/float, получено {type(v).__name__}"
+    msg = f"schedule: в value жду str/int/float, не {type(v).__name__}"
     raise TypeError(msg)
 
 
 def load_irq_schedule_json(path: Path) -> tuple[IrqScheduleEvent, ...]:
-    """JSON-массив объектов ``{\"tick\": int, \"irq\": int, \"value\": …}``.
-
-    ``value`` — число 0…255 или строка из одного символа (берётся код байта).
-    """
+    """JSON-массив {tick, irq, value}; value — число или одна буква в строке"""
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, list):
-        msg = "Расписание: ожидается JSON-массив"
+        msg = "schedule: нужен массив JSON"
         raise ValueError(msg)
     out: list[IrqScheduleEvent] = []
     for i, o in enumerate(raw):
         if not isinstance(o, dict):
-            msg = f"Расписание: элемент {i} не объект"
+            msg = f"schedule: элемент {i} не объект JSON"
             raise ValueError(msg)
         tick = int(o["tick"])
         irq = int(o["irq"])
         if irq < 0 or irq >= NUM_IRQ_LINES:
-            msg = f"Расписание: irq вне 0…{NUM_IRQ_LINES - 1}"
+            msg = f"schedule: irq вне 0…{NUM_IRQ_LINES - 1}"
             raise ValueError(msg)
         value = _byte_from_json_value(o.get("value", 0))
         out.append(IrqScheduleEvent(tick=tick, irq=irq, value=value))
