@@ -1,0 +1,4 @@
+(progn
+  (out 72)   ; H
+  (out 105)  ; i
+  (out 10))  ; \n
