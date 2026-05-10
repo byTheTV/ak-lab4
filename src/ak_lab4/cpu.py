@@ -7,7 +7,15 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import TextIO
 
-from ak_lab4.isa import OPERAND_MASK, Opcode, Port, sign_extend_operand_i, unpack_word
+from ak_lab4.io_schedule import IrqScheduleEvent
+from ak_lab4.isa import (
+    NUM_IRQ_LINES,
+    OPERAND_MASK,
+    Opcode,
+    Port,
+    sign_extend_operand_i,
+    unpack_word,
+)
 from ak_lab4.memory import DM_SIZE_WORDS, IM_SIZE_WORDS, STACK_BASE
 
 
@@ -37,6 +45,8 @@ _TICKS: dict[int, int] = {
     int(Opcode.IN): 3,
     int(Opcode.OUT): 3,
     int(Opcode.HALT): 1,
+    int(Opcode.EI): 1,
+    int(Opcode.CLI): 1,
 }
 
 
@@ -54,13 +64,56 @@ class Cpu:
     input_queue: deque[int] = field(default_factory=deque)
     # Вывод порта DATA_OUT — накапливаем байты (младший октет слова).
     out_bytes: list[int] = field(default_factory=list)
+    # Расписание trap (прерываний по такту): см. io_schedule.load_irq_schedule_json
+    irq_schedule: tuple[IrqScheduleEvent, ...] = field(default_factory=tuple)
+    _schedule_i: int = field(default=0, repr=False)
+    # Последнее значение на линии irq (после события расписания); для отладки/отчёта.
+    irq_latches: dict[int, int] = field(default_factory=dict)
+    # Линии запроса: расписание ставит pending и байт на линии (не смешивать со stdin).
+    irq_pending: list[bool] = field(default_factory=lambda: [False] * NUM_IRQ_LINES)
+    irq_line_value: list[int] = field(default_factory=lambda: [0] * NUM_IRQ_LINES)
+    irq_enabled: bool = True
+    interrupt_depth: int = 0
+    # Байт, переданный в обработчик при доставке запроса (читает первый IN на DATA_IN в ISR).
+    _irq_delivered_byte: int | None = field(default=None, repr=False)
+
+    def _apply_irq_schedule_for_current_ticks(self) -> None:
+        """Зафиксировать события расписания: линия irq, значение на порту, флаг запроса."""
+        while self._schedule_i < len(self.irq_schedule):
+            ev = self.irq_schedule[self._schedule_i]
+            if ev.tick > self.ticks:
+                break
+            irq = ev.irq
+            if 0 <= irq < NUM_IRQ_LINES:
+                v = ev.value & 0xFF
+                self.irq_line_value[irq] = v
+                self.irq_latches[irq] = v
+                self.irq_pending[irq] = True
+            self._schedule_i += 1
+
+    def _read_vector_target(self, irq: int) -> int:
+        idx = 1 + irq
+        if idx < 0 or idx >= IM_SIZE_WORDS:
+            msg = f"Вектор IRQ {irq} вне IM"
+            raise CpuFault(msg)
+        op_b, opnd = unpack_word(self.im[idx])
+        if op_b != int(Opcode.JMP):
+            msg = f"Вектор IRQ {irq}: ожидался jmp (word @{idx})"
+            raise CpuFault(msg)
+        return self._ensure_im_pc(opnd & OPERAND_MASK)
 
     def _read_port_in(self, port: int) -> int:
-        """Значение для IN: для DATA_IN — следующий байт или −1 (EOF); иначе 0."""
+        """Значение для IN по номеру порта."""
         if port == int(Port.DATA_IN):
+            if self._irq_delivered_byte is not None:
+                b = self._irq_delivered_byte & 0xFF
+                self._irq_delivered_byte = None
+                return b
             if self.input_queue:
                 return self.input_queue.popleft() & 0xFF
             return -1
+        if port == int(Port.IRQ_STATUS):
+            return ((self.interrupt_depth & 0xFF) << 8) | (1 if self.irq_enabled else 0)
         return 0
 
     def _ensure_dm_addr(self, addr: int) -> int:
@@ -107,16 +160,18 @@ class Cpu:
         if self.halted:
             return
 
+        self._apply_irq_schedule_for_current_ticks()
+
         pc0 = self._ensure_im_pc(self.pc)
         word = self.im[pc0] & 0xFFFFFFFF
         op_byte, operand = unpack_word(word)
         next_pc = pc0 + 1
 
         if log is not None:
-            log.write(f"{self.ticks}\t{pc0}\t{word:08X}\n")
+            mode = "ISR" if self.interrupt_depth > 0 else "USR"
+            log.write(f"{self.ticks}\t{pc0}\t{word:08X}\t{mode}\n")
 
         op = op_byte
-        self._add_ticks(op)
 
         match op:
             case x if x == Opcode.NOP:
@@ -202,6 +257,8 @@ class Cpu:
                 self.pc = self._ensure_im_pc(target)
             case x if x == Opcode.RET:
                 addr = self._pop()
+                if self.interrupt_depth > 0:
+                    self.interrupt_depth -= 1
                 self.pc = self._ensure_im_pc(addr & 0xFFFFFFFF)
             case x if x == Opcode.IN:
                 port = operand & 0xFFFF
@@ -215,6 +272,16 @@ class Cpu:
                 port = operand & 0xFFFF
                 if port == int(Port.DATA_OUT):
                     self.out_bytes.append(val & 0xFF)
+                elif port == int(Port.IRQ_STATUS):
+                    self.irq_enabled = (val & 0xFFFFFFFF) != 0
+                elif port == int(Port.IRQ_EOI):
+                    pass
+                self.pc = next_pc
+            case x if x == Opcode.EI:
+                self.irq_enabled = True
+                self.pc = next_pc
+            case x if x == Opcode.CLI:
+                self.irq_enabled = False
                 self.pc = next_pc
             case x if x == Opcode.HALT:
                 self.halted = True
@@ -222,6 +289,29 @@ class Cpu:
             case _:
                 msg = f"Неизвестный опкод: 0x{op_byte:02X} в PC={pc0}, слово={word:08X}"
                 raise CpuFault(msg)
+
+        self._add_ticks(op)
+        if not self.halted:
+            self._try_deliver_irq_after_instruction()
+
+    def _try_deliver_irq_after_instruction(self) -> None:
+        """После инструкции: один запрос → push адреса следующей команды, PC := обработчик."""
+        if self.ticks == 0:
+            return
+        if not self.irq_enabled:
+            return
+        if self.interrupt_depth > 0:
+            return
+        for irq in range(NUM_IRQ_LINES):
+            if not self.irq_pending[irq]:
+                continue
+            ret_pc = self.pc
+            self._push(ret_pc & 0xFFFFFFFF)
+            self.pc = self._read_vector_target(irq)
+            self.interrupt_depth += 1
+            self._irq_delivered_byte = self.irq_line_value[irq] & 0xFF
+            self.irq_pending[irq] = False
+            return
 
 
 def _signed32(u: int) -> int:

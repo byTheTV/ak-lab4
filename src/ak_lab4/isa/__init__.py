@@ -8,6 +8,9 @@ from enum import IntEnum
 OPCODE_SHIFT: int = 24
 OPERAND_MASK: int = 0xFFFFFF
 
+# Линии запроса прерывания в расписании (--schedule) и в таблице векторов IM[1..N].
+NUM_IRQ_LINES: int = 8
+
 
 class Opcode(IntEnum):
     """Коды операций (старший байт слова)."""
@@ -32,6 +35,8 @@ class Opcode(IntEnum):
     IN = 0x30
     OUT = 0x31
     HALT = 0x32
+    EI = 0x33  # разрешить маскируемые прерывания
+    CLI = 0x34  # запретить маскируемые прерывания
 
 
 class Port(IntEnum):
