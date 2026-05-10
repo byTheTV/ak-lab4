@@ -1,4 +1,4 @@
-"""AST S-выражений (этап транслятора до семантики и codegen)."""
+"""AST до семантики/codegen"""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ class Symbol:
 
 @dataclass(frozen=True, slots=True)
 class SList:
-    """Вызов / специальная форма / вложенный список."""
+    """вызов, спецформа или вложенный список"""
 
     items: tuple[Expr, ...]
 
@@ -31,7 +31,7 @@ Expr = IntLit | StrLit | Symbol | SList
 
 
 def expr_repr(e: Expr) -> str:
-    """Детерминированная строка для тестов и golden (без адресов объектов)."""
+    """строка для тестов/golden, без id объектов"""
     match e:
         case IntLit(v):
             return f"(int {v})"

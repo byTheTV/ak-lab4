@@ -1,4 +1,4 @@
-"""Точка входа: python -m ak_lab4.simulator code.bin data.bin [опции]."""
+"""Запуск: python -m ak_lab4.simulator"""
 
 from __future__ import annotations
 
@@ -14,35 +14,34 @@ from ak_lab4.memory import STACK_BASE
 
 
 def apply_input_to_cpu(cpu: Cpu, spec: str) -> None:
-    """Заполнить ``cpu.input_queue`` байтами из файла или из stdin (спецификатор «-»)."""
     raw = sys.stdin.buffer.read() if spec == "-" else Path(spec).read_bytes()
     cpu.input_queue.extend(raw)
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="Симулятор Гарвард v0 (code.bin + data.bin).")
-    p.add_argument("code", type=Path, help="Путь к code.bin")
-    p.add_argument("data", type=Path, help="Путь к data.bin")
-    p.add_argument("--log", type=Path, default=None, help="Журнал тактов (опционально)")
+    p = argparse.ArgumentParser(description="Симулятор Гарварда: code.bin и data.bin")
+    p.add_argument("code", type=Path, help="code.bin")
+    p.add_argument("data", type=Path, help="data.bin")
+    p.add_argument("--log", type=Path, default=None, help="файл журнала")
     p.add_argument(
         "--max-ticks",
         type=int,
         default=10_000_000,
         metavar="N",
-        help="Лимит суммарных тактов (по умолчанию 10^7)",
+        help="предел суммарных тактов (default: 10^7)",
     )
     p.add_argument(
         "--input",
         metavar="PATH|-",
         default=None,
-        help="Байты в очередь чтения порта DATA_IN (файл или «-» = весь stdin)",
+        help="байты в очередь DATA_IN; «-» — stdin целиком",
     )
     p.add_argument(
         "--schedule",
         type=Path,
         default=None,
         metavar="PATH",
-        help="JSON: события [{tick, irq, value}] — trap по суммарным тактам → очередь ввода",
+        help="JSON [{tick, irq, value}, …] для trap",
     )
     args = p.parse_args(argv)
 
@@ -50,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
         code_words = load_words_le(args.code)
         data_words = load_words_le(args.data)
     except OSError as e:
-        print(f"Ошибка чтения файла: {e}", file=sys.stderr)
+        print(e, file=sys.stderr)
         return 2
     except ValueError as e:
         print(str(e), file=sys.stderr)
@@ -63,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             irq_sched = load_irq_schedule_json(args.schedule)
         except (OSError, ValueError, KeyError, json.JSONDecodeError) as e:
-            print(f"Ошибка --schedule: {e}", file=sys.stderr)
+            print(f"--schedule: {e}", file=sys.stderr)
             return 2
 
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=irq_sched)
@@ -72,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             apply_input_to_cpu(cpu, args.input)
         except OSError as e:
-            print(f"Ошибка чтения --input: {e}", file=sys.stderr)
+            print(e, file=sys.stderr)
             return 2
 
     log_file = None
@@ -88,9 +87,9 @@ def main(argv: list[str] | None = None) -> int:
             log_file.close()
 
     if not cpu.halted:
-        print("Симуляция завершилась без HALT", file=sys.stderr)
+        print("не достигнут HALT (см. лимит тактов)", file=sys.stderr)
         return 1
-    print(f"HALT: ticks={cpu.ticks}, PC={cpu.pc}, SP=0x{cpu.sp:X}")
+    print(f"HALT ticks={cpu.ticks} PC={cpu.pc} SP=0x{cpu.sp:X}")
     return 0
 
 

@@ -1,4 +1,4 @@
-"""Лексический анализ S-выражений."""
+"""Лексер для S-выражений"""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ class Token:
     kind: TokKind
     text: str
     loc: SourceLoc
-    # Для INT — десятичное значение; для остальных — не используется
+    # у INT — значение, у остальных не используется
     int_value: int | None = None
 
 
@@ -37,7 +37,7 @@ class LexError(ValueError):
 
 
 def tokenize(source: str) -> list[Token]:
-    """Разобрать поток токенов; пробельные символы пропускаются."""
+    """Токены по тексту, пробелы и комментарии ; … до конца строки пропускаются"""
     i = 0
     line = 1
     col = 1

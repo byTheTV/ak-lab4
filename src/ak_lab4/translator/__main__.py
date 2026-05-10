@@ -1,4 +1,4 @@
-"""Точка входа: `python -m ak_lab4.translator`."""
+"""Точка входа"""
 
 from ak_lab4.translator.cli import main
 

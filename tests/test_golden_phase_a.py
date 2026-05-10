@@ -1,4 +1,4 @@
-"""Golden-сценарии фазы A — см. ``golden/<case>/`` и ``golden/README.md``."""
+"""golden фазы A — каталоги golden/<case>/"""
 
 from __future__ import annotations
 

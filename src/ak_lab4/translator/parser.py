@@ -1,4 +1,4 @@
-"""Разбор S-выражений в AST."""
+"""Разбор S-выражений в AST"""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ class ParseError(ValueError):
 
 
 def parse(source: str) -> Expr:
-    """Одно S-выражение (одна форма)."""
+    """Одно S-выражение (одна форма)"""
     toks = tokenize(source)
     p = _Parser(toks)
     e = p.parse_expr()
@@ -25,7 +25,7 @@ def parse(source: str) -> Expr:
 
 
 def parse_many(source: str) -> tuple[Expr, ...]:
-    """Несколько верхнеуровневых форм подряд."""
+    """Несколько верхнеуровневых форм подряд"""
     toks = tokenize(source)
     p = _Parser(toks)
     items: list[Expr] = []
@@ -117,7 +117,7 @@ class _Parser:
 
 
 def parse_file(path: str) -> tuple[Expr, ...]:
-    """Прочитать файл и разобрать все верхнеуровневые формы."""
+    """Спарсить файл и разобрать по формам"""
     from pathlib import Path
 
     text = Path(path).read_text(encoding="utf-8")

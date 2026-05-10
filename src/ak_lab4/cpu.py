@@ -1,4 +1,4 @@
-"""Модель CPU: PC/SP, такты, исполнение по таблице opcodes v0."""
+"""CPU: PC/SP, такты, опкоды v0"""
 
 from __future__ import annotations
 
@@ -20,10 +20,10 @@ from ak_lab4.memory import DM_SIZE_WORDS, IM_SIZE_WORDS, STACK_BASE
 
 
 class CpuFault(RuntimeError):
-    """Ошибка исполнения (стек, PC, деление на ноль и т.д.)."""
+    """Сбой исполнения (стек, PC, деление на 0, …)"""
 
 
-# Такты на команду по docs/spec/03-isa-opcodes-v0.md
+# Такты на команду
 _TICKS: dict[int, int] = {
     int(Opcode.NOP): 1,
     int(Opcode.PUSH_IMM): 2,
@@ -52,7 +52,7 @@ _TICKS: dict[int, int] = {
 
 @dataclass
 class Cpu:
-    """Гарвард: отдельные банки IM/DM, словная адресация."""
+    """Гарвард: IM/DM, адрес словами"""
 
     im: list[int] = field(default_factory=lambda: [0] * IM_SIZE_WORDS)
     dm: list[int] = field(default_factory=lambda: [0] * DM_SIZE_WORDS)
@@ -60,25 +60,31 @@ class Cpu:
     sp: int = STACK_BASE
     ticks: int = 0
     halted: bool = False
-    # Ввод порта DATA_IN: байты снимаются слева; пустая очередь → на стек кладётся −1 (EOF).
+
+    # DATA_IN: очередь байт слева; пусто → на стек −1 (EOF)
     input_queue: deque[int] = field(default_factory=deque)
-    # Вывод порта DATA_OUT — накапливаем байты (младший октет слова).
+
+    # DATA_OUT: байты из младшего октета слова
     out_bytes: list[int] = field(default_factory=list)
-    # Расписание trap (прерываний по такту): см. io_schedule.load_irq_schedule_json
+
+    # trap по тактам
     irq_schedule: tuple[IrqScheduleEvent, ...] = field(default_factory=tuple)
     _schedule_i: int = field(default=0, repr=False)
-    # Последнее значение на линии irq (после события расписания); для отладки/отчёта.
+
+    # последнее значение на линии irq (после события)
     irq_latches: dict[int, int] = field(default_factory=dict)
-    # Линии запроса: расписание ставит pending и байт на линии (не смешивать со stdin).
+
+    # запрос по линии + байт на линии (не stdin)
     irq_pending: list[bool] = field(default_factory=lambda: [False] * NUM_IRQ_LINES)
     irq_line_value: list[int] = field(default_factory=lambda: [0] * NUM_IRQ_LINES)
     irq_enabled: bool = True
     interrupt_depth: int = 0
-    # Байт, переданный в обработчик при доставке запроса (читает первый IN на DATA_IN в ISR).
+
+    # байт для первого IN в ISR после доставки IRQ
     _irq_delivered_byte: int | None = field(default=None, repr=False)
 
     def _apply_irq_schedule_for_current_ticks(self) -> None:
-        """Зафиксировать события расписания: линия irq, значение на порту, флаг запроса."""
+        """события расписания на текущий такт"""
         while self._schedule_i < len(self.irq_schedule):
             ev = self.irq_schedule[self._schedule_i]
             if ev.tick > self.ticks:
@@ -103,7 +109,7 @@ class Cpu:
         return self._ensure_im_pc(opnd & OPERAND_MASK)
 
     def _read_port_in(self, port: int) -> int:
-        """Значение для IN по номеру порта."""
+        """чтение IN по номеру порта"""
         if port == int(Port.DATA_IN):
             if self._irq_delivered_byte is not None:
                 b = self._irq_delivered_byte & 0xFF
@@ -156,7 +162,7 @@ class Cpu:
         self.ticks += _TICKS.get(op, 1)
 
     def step(self, log: TextIO | None = None) -> None:
-        """Одна инструкция (или noop если уже halt)."""
+        """одна инструкция; при halt ничего"""
         if self.halted:
             return
 
@@ -263,7 +269,7 @@ class Cpu:
             case x if x == Opcode.IN:
                 port = operand & 0xFFFF
                 if (operand >> 16) & 0xFF != 0:
-                    pass  # зарезервированные биты — игнор в v0
+                    pass  # резерв в v0 не трогаем
                 val = self._read_port_in(port)
                 self._push(_unsigned32(val))
                 self.pc = next_pc
@@ -295,7 +301,7 @@ class Cpu:
             self._try_deliver_irq_after_instruction()
 
     def _try_deliver_irq_after_instruction(self) -> None:
-        """После инструкции: один запрос → push адреса следующей команды, PC := обработчик."""
+        """после инструкции: один pending IRQ → push return PC, jmp на вектор"""
         if self.ticks == 0:
             return
         if not self.irq_enabled:
@@ -327,7 +333,7 @@ def init_memory_from_segments(
     code_words: list[int],
     data_words: list[int],
 ) -> tuple[list[int], list[int]]:
-    """Создать IM/DM, начиная с entry PC=0 и data с адреса 0."""
+    """залить IM с PC=0 и DM с адреса 0"""
     im = [0] * IM_SIZE_WORDS
     dm = [0] * DM_SIZE_WORDS
     for i, w in enumerate(code_words):
@@ -349,7 +355,7 @@ def run_program(
     max_ticks: int,
     log: TextIO | None = None,
 ) -> None:
-    """Исполнять до halt, ошибки или лимита суммарных тактов."""
+    """крутить step до halt/fault/лимита тактов"""
     while not cpu.halted:
         if cpu.ticks >= max_ticks:
             msg = f"Превышен лимит тактов ({max_ticks})"

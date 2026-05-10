@@ -1,1 +1,1 @@
-"""Пакет CLI симулятора (`python -m ak_lab4.simulator`)."""
+"""CLI симулятора: python -m ak_lab4.simulator"""

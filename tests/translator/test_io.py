@@ -38,7 +38,7 @@ def test_out_writes_low_byte_and_returns_value() -> None:
 
 
 def test_out_in_progn_side_effect() -> None:
-    """Последняя форма progn задаёт результат на стеке."""
+    """результат progn — то, что оставила последняя форма"""
     src = "(progn (out 1) (+ 2 3))"
     words = compile_forms(parse_many(src)).code
     im, dm = init_memory_from_segments(words, [])

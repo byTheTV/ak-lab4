@@ -1,4 +1,4 @@
-"""Генерация машинных слов: arith, setq, if, eq, progn, in/out (порты), defun, CALL."""
+"""Генерация машинных слов: arith, setq, if, eq, progn, in/out (порты), defun, CALL"""
 
 from __future__ import annotations
 
@@ -20,12 +20,12 @@ _ARITH: dict[str, Opcode] = {
 
 
 class CodegenError(ValueError):
-    """Неподдерживаемая конструкция или неверная арность."""
+    """Неподдерживаемая конструкция или неверная арность"""
 
 
 @dataclass
 class CompiledProgram:
-    """Результат компиляции: Гарвард — память команд и память данных (pstr и слоты переменных)."""
+    """Гарвард: IM для кода, DM для pstr и слотов переменных"""
 
     code: list[int]
     data: list[int]
@@ -43,7 +43,7 @@ def _collect_bindings(
     *,
     slot_base: int = 0,
 ) -> tuple[dict[str, int], dict[tuple[str, str], int]]:
-    """Глобальные слоты setq + слоты параметров (fname, pname) → адрес DM."""
+    """глобальные setq и слоты (fname, pname) → адрес в DM"""
 
     order_setq: list[str] = []
 
@@ -98,7 +98,7 @@ def _collect_bindings(
 
 
 def _walk_collect_str_literals(e: Expr, seen: set[str], ordered: list[str]) -> None:
-    """Порядок первых вхождений уникальных строковых литералов."""
+    """первые вхождения уникальных строк по порядку обхода"""
     match e:
         case StrLit(s):
             if s not in seen:
@@ -120,7 +120,7 @@ def _ordered_unique_strings_from_forms(forms: tuple[Expr, ...]) -> list[str]:
 
 
 def _layout_pstr(strings: list[str]) -> tuple[list[int], dict[str, int]]:
-    """Слова данных: [len][ord(c0)][ord(c1)]…; база pstr — адрес слова длины."""
+    """слова [len][ord…]; база строки — адрес слова длины"""
     data: list[int] = []
     addr: dict[str, int] = {}
     for s in strings:
@@ -277,7 +277,7 @@ def _emit(
     param_slot_addr: dict[tuple[str, str], int] | None = None,
     string_addrs: dict[str, int] | None = None,
 ) -> list[int]:
-    """func_param_sig / param_slot_addr нужны для вызовов с аргументами."""
+    """вызовы с аргументами — нужны func_param_sig и param_slot_addr"""
 
     match e:
         case IntLit(v):
@@ -596,7 +596,7 @@ def _compile_with_defuns(
 
 
 def _handler_needs_drop_before_ret(body: Expr) -> bool:
-    """ISR: последняя форма оставила значение на стеке — нужен DROP перед RET."""
+    """если последняя форма ISR что-то положила на стек — перед RET нужен DROP"""
 
     def last_form(ex: Expr) -> Expr:
         if isinstance(ex, SList) and ex.items:
@@ -633,7 +633,7 @@ def _compile_with_defuns_interrupts(
     slot_base: int,
     string_addrs: dict[str, int],
 ) -> list[int]:
-    """_compile_with_defuns + векторы IM[1..N]=jmp handler; после HALT — обработчики и RET."""
+    """как _compile_with_defuns, плюс IM[1..N]=jmp на handler; после HALT — ISR и RET"""
     irq_vals = tuple(irq_handlers.values())
     all_forms = tuple(defuns) + mains + irq_vals
     global_slots, param_slot_addr = _collect_bindings(all_forms, slot_base=slot_base)
@@ -780,7 +780,7 @@ def _compile_mains_interrupts(
 
 
 def compile_program(expr: Expr) -> CompiledProgram:
-    """Одно выражение-программа: код, сегмент данных (pstr) и завершающий HALT."""
+    """одна верхнеуровневая форма — код, pstr в DM, HALT в конце"""
     strings = _ordered_unique_strings_from_forms((expr,))
     data_words, str_addr = _layout_pstr(strings)
     slot_base = len(data_words)
@@ -792,7 +792,7 @@ def compile_program(expr: Expr) -> CompiledProgram:
 
 
 def compile_forms(forms: tuple[Expr, ...]) -> CompiledProgram:
-    """Несколько верхнеуровневых форм; defun / опционально trailing (interrupt n …)."""
+    """несколько форм, defun и опционально хвост (interrupt n …)"""
     if not forms:
         raise CodegenError("Нет форм для компиляции")
     strings = _ordered_unique_strings_from_forms(forms)

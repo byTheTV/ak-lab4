@@ -1,4 +1,4 @@
-"""Консольный интерфейс транслятора (вызов из `__main__` или тестов)."""
+"""CLI транслятора"""
 
 from __future__ import annotations
 
@@ -10,58 +10,58 @@ from ak_lab4.loader import write_words_le
 from ak_lab4.translator import CodegenError, LexError, ParseError, compile_forms, parse_many
 
 _CLI_EPILOG = """\
-Пример цепочки:
-  python -m ak_lab4.translator p.lisp -o code.bin --data-out data.bin
+Пример:
+  python -m ak_lab4.translator prog.tv -o code.bin --data-out data.bin
   python -m ak_lab4.simulator code.bin data.bin
-Ввод порта DATA_IN (синхронный «порт» в ISA):
-  python -m ak_lab4.simulator code.bin data.bin --input вход.bin
-Trap — асинхронные события по суммарным тактам симуляции (JSON-массив):
-  python -m ak_lab4.simulator code.bin data.bin --schedule irq.json
-  Формат irq.json: [{"tick": 50, "irq": 0, "value": 65}] (value — число или одна буква в строке).
-Подробнее: docs/io-trap-port.md
+
+Ввод порта:
+  ... simulator ... --input stdin.bin
+
+Trap (JSON массив событий по тактам):
+  ... simulator ... --schedule irq.json
+  см. docs/io-trap-port.md
 """
 
 
 def write_listing(path: Path, words: list[int]) -> None:
-    """Текстовый листинг: `<addr> - <HEX8>` по строке на слово."""
     lines = [f"{i} - {w:08X}" for i, w in enumerate(words)]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        description="Транслятор Lisp - code.bin; несколько форм = как progn.",
+        description="file -> code.bin; несколько форм подряд склеиваются как progn",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=_CLI_EPILOG,
     )
-    p.add_argument("input", type=Path, help="Исходный .lisp")
+    p.add_argument("input", type=Path, help="Исходник")
     p.add_argument(
         "-o",
         "--output",
         type=Path,
         default=Path("code.bin"),
-        help="Выход: память команд (по умолчанию code.bin)",
+        help="Память команд (default: code.bin)",
     )
     p.add_argument(
         "--data-out",
         type=Path,
         default=None,
         metavar="PATH",
-        help="Выход: память данных (пустой сегмент, если указан)",
+        help="data.bin; нужен, если в программе есть строковые литералы",
     )
     p.add_argument(
         "--listing",
         type=Path,
         default=None,
         metavar="PATH",
-        help="Текстовый hex-листинг",
+        help="листинг команд",
     )
     args = p.parse_args(argv)
 
     try:
         text = args.input.read_text(encoding="utf-8")
     except OSError as e:
-        print(f"Ошибка чтения: {e}", file=sys.stderr)
+        print(f"{args.input}: {e}", file=sys.stderr)
         return 2
 
     try:
@@ -71,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if len(forms) == 0:
-        print("Ошибка: пустой или только пробельный вход", file=sys.stderr)
+        print("ошибка: пустой файл", file=sys.stderr)
         return 1
 
     try:
@@ -85,8 +85,7 @@ def main(argv: list[str] | None = None) -> int:
         if prog.data:
             if args.data_out is None:
                 print(
-                    "Ошибка: в программе есть строковые литералы — укажите --data-out для "
-                    "сегмента данных (Гарвард).",
+                    "ошибка: укажите --data-out (в программе есть литералы в сегменте данных)",
                     file=sys.stderr,
                 )
                 return 1
@@ -96,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.listing is not None:
             write_listing(args.listing, prog.code)
     except OSError as e:
-        print(f"Ошибка записи: {e}", file=sys.stderr)
+        print(e, file=sys.stderr)
         return 2
 
     return 0

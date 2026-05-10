@@ -1,4 +1,4 @@
-"""Транслятор Lisp: лексер, парсер, AST, минимальная генерация кода."""
+"""Лисп-транслятор: лексер, парсер, AST, codegen"""
 
 from ak_lab4.translator.ast import Expr, IntLit, SList, StrLit, Symbol, expr_repr
 from ak_lab4.translator.codegen import (
