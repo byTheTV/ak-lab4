@@ -1,0 +1,19 @@
+; Project Euler #1: сумма натуральных < lim, кратных 3 или 5 (lim = 1000 → 233168)
+; Рекурсия addmul(i, lim, acc); m3/m5 — остатки, bit — вклад i в сумму
+
+(defun addmul (i lim acc)
+  (if (< i lim)
+      (progn
+        (setq m3 (mod i 3))
+        (setq m5 (mod i 5))
+        (setq bit (if (eq 0 m3) i (if (eq 0 m5) i 0)))
+        (addmul (+ i 1) lim (+ acc bit)))
+      acc))
+
+(progn
+  (setq ans (addmul 1 1000 0))
+  (out (mod ans 256))
+  (out (mod (/ ans 256) 256))
+  (out (mod (/ (/ ans 256) 256) 256))
+  (out (mod (/ (/ (/ ans 256) 256) 256) 256))
+  0)
