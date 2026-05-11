@@ -1,0 +1,63 @@
+; P = 100001a + 10010b + 1100c = 11·(9091a+910b+100c) ⇒ 11|P.
+
+(defun good_q (q)
+  (if (> q 99) (if (< q 1000) 1 0) 0))
+
+(defun has_fact (p x)
+  (if (< x 1000)
+      (if (< p (* x x))
+          0
+          (if (eq 0 (mod p x))
+              (progn
+                (setq q (/ p x))
+                (if (good_q q)
+                    (if (eq 0 (mod x 11))
+                        1
+                        (if (eq 0 (mod q 11))
+                            1
+                            (has_fact p (+ x 1))))
+                    (has_fact p (+ x 1))))
+              (has_fact p (+ x 1))))
+      0))
+
+(defun upd (p best)
+  (if (eq 1 (has_fact p 100))
+      (if (> p best) p best)
+      best))
+
+(defun loop_c6 (a b c best)
+  (if (< c 10)
+      (progn
+        (setq best_c6 (upd (+ (+ (* 100001 a) (* 10010 b)) (* 1100 c)) best))
+        (loop_c6 a b (+ c 1) best_c6))
+      best))
+
+(defun loop_b6 (a b best)
+  (if (< b 10)
+      (progn
+        (setq best_b6 (loop_c6 a b 0 best))
+        (loop_b6 a (+ b 1) best_b6))
+      best))
+
+(defun loop_a6 (a best)
+  (if (< a 10)
+      (progn
+        (setq best_a6 (loop_b6 a 0 best))
+        (loop_a6 (+ a 1) best_a6))
+      best))
+
+(defun out_u32 (w)
+  (progn
+    (out (mod w 256))
+    (setq w (/ w 256))
+    (out (mod w 256))
+    (setq w (/ w 256))
+    (out (mod w 256))
+    (setq w (/ w 256))
+    (out (mod w 256))
+    0))
+
+(progn
+  (setq ans (loop_a6 1 0))
+  (out_u32 ans)
+  0)
