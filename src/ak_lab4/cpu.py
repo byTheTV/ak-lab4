@@ -66,6 +66,26 @@ def _opcode_breaks_dual_issue(op: int) -> bool:
     )
 
 
+def can_dual_issue(op0: int, op1: int) -> bool:
+    """
+    Консервативная проверка независимости пары (MVP + расширение).
+    Разрешены только комбинации без конфликта по стеку для TOS.
+    """
+    n0, n1 = int(Opcode.NOP), int(Opcode.PUSH_IMM)
+    d = int(Opcode.DUP)
+    if op0 == n0 and op1 == n0:
+        return True
+    if op0 == n1 and op1 == n1:
+        return True
+    if op0 == n1 and op1 == n0:
+        return True
+    if op0 == n0 and op1 == n1:
+        return True
+    if op0 == d and op1 == n0:
+        return True
+    return op0 == n0 and op1 == d
+
+
 @dataclass
 class Cpu:
     """Гарвард: IM/DM, адрес словами"""
