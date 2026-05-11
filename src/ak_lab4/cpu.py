@@ -51,6 +51,41 @@ _TICKS: dict[int, int] = {
 }
 
 
+def _opcode_breaks_dual_issue(op: int) -> bool:
+    """Вторая инструкция в паре не выдаётся вместе с ветвлением/остановом/портами IRQ."""
+    return op in (
+        int(Opcode.JMP),
+        int(Opcode.JZ),
+        int(Opcode.CALL),
+        int(Opcode.RET),
+        int(Opcode.HALT),
+        int(Opcode.EI),
+        int(Opcode.CLI),
+        int(Opcode.IN),
+        int(Opcode.OUT),
+    )
+
+
+def can_dual_issue(op0: int, op1: int) -> bool:
+    """
+    Консервативная проверка независимости пары (MVP + расширение).
+    Разрешены только комбинации без конфликта по стеку для TOS.
+    """
+    n0, n1 = int(Opcode.NOP), int(Opcode.PUSH_IMM)
+    d = int(Opcode.DUP)
+    if op0 == n0 and op1 == n0:
+        return True
+    if op0 == n1 and op1 == n1:
+        return True
+    if op0 == n1 and op1 == n0:
+        return True
+    if op0 == n0 and op1 == n1:
+        return True
+    if op0 == d and op1 == n0:
+        return True
+    return op0 == n0 and op1 == d
+
+
 @dataclass
 class Cpu:
     """Гарвард: IM/DM, адрес словами"""
@@ -61,6 +96,10 @@ class Cpu:
     sp: int = STACK_BASE
     ticks: int = 0
     halted: bool = False
+
+    # True: за один step — до двух последовательных инструкций (при отсутствии конфликтов).
+    # По умолчанию выключено — golden и старые тесты без изменений.
+    superscalar: bool = False
 
     # DATA_IN: очередь байт слева; пусто → на стек −1 (EOF)
     input_queue: deque[int] = field(default_factory=deque)
@@ -162,22 +201,9 @@ class Cpu:
     def _add_ticks(self, op: int) -> None:
         self.ticks += _TICKS.get(op, 1)
 
-    def step(self, log: TextIO | None = None) -> None:
-        """одна инструкция; при halt ничего"""
-        if self.halted:
-            return
-
-        self._apply_irq_schedule_for_current_ticks()
-
-        pc0 = self._ensure_im_pc(self.pc)
-        word = self.im[pc0] & 0xFFFFFFFF
-        op_byte, operand = unpack_word(word)
-        next_pc = pc0 + 1
-
-        if log is not None:
-            mode = "ISR" if self.interrupt_depth > 0 else "USR"
-            log.write(f"{self.ticks}\t{pc0}\t{word:08X}\t{mode}\n")
-
+    def _dispatch_opcode(self, insn_pc: int, op_byte: int, operand: int) -> None:
+        """Исполнить одну инструкцию с адреса insn_pc (next_pc = insn_pc+1 для линейного потока)."""
+        next_pc = insn_pc + 1
         op = op_byte
 
         match op:
@@ -301,12 +327,85 @@ class Cpu:
                 self.halted = True
                 self.pc = next_pc
             case _:
-                msg = f"неизвестный опкод 0x{op_byte:02X} @PC={pc0} word={word:08X}"
+                word = self.im[insn_pc] & 0xFFFFFFFF
+                msg = f"неизвестный опкод 0x{op_byte:02X} @PC={insn_pc} word={word:08X}"
                 raise CpuFault(msg)
 
-        self._add_ticks(op)
+    def _step_scalar(self, log: TextIO | None) -> None:
+        """Одна инструкция по PC (классическое поведение)."""
+        pc0 = self._ensure_im_pc(self.pc)
+        word = self.im[pc0] & 0xFFFFFFFF
+        op_byte, operand = unpack_word(word)
+
+        if log is not None:
+            mode = "ISR" if self.interrupt_depth > 0 else "USR"
+            log.write(f"{self.ticks}\t{pc0}\t{word:08X}\t{mode}\n")
+
+        self._dispatch_opcode(pc0, op_byte, operand)
+        self._add_ticks(op_byte)
         if not self.halted:
             self._try_deliver_irq_after_instruction()
+
+    def _step_superscalar(self, log: TextIO | None) -> None:
+        """До двух последовательных инструкций за один step при отсутствии конфликтов."""
+        if self.interrupt_depth > 0:
+            self._step_scalar(log)
+            return
+
+        pc0 = self._ensure_im_pc(self.pc)
+        word0 = self.im[pc0] & 0xFFFFFFFF
+        op0, od0 = unpack_word(word0)
+
+        if _opcode_breaks_dual_issue(op0):
+            self._step_scalar(log)
+            return
+
+        pc1 = pc0 + 1
+        if pc1 >= IM_SIZE_WORDS:
+            self._step_scalar(log)
+            return
+
+        word1 = self.im[pc1] & 0xFFFFFFFF
+        op1, od1 = unpack_word(word1)
+
+        if _opcode_breaks_dual_issue(op1) or op1 == int(Opcode.HALT):
+            self._step_scalar(log)
+            return
+
+        if not can_dual_issue(op0, op1):
+            self._step_scalar(log)
+            return
+
+        if log is not None:
+            mode = "ISR" if self.interrupt_depth > 0 else "USR"
+            log.write(
+                f"{self.ticks}\tPAR\t{pc0}\t{word0:08X}\t{pc1}\t{word1:08X}\t{mode}\n",
+            )
+
+        self._dispatch_opcode(pc0, op0, od0)
+        if self.halted:
+            self._add_ticks(op0)
+            return
+
+        self._dispatch_opcode(pc1, op1, od1)
+        tick0 = _TICKS.get(op0, 1)
+        tick1 = _TICKS.get(op1, 1)
+        self.ticks += tick0 if tick0 > tick1 else tick1
+
+        if not self.halted:
+            self._try_deliver_irq_after_instruction()
+
+    def step(self, log: TextIO | None = None) -> None:
+        """одна «порция» исполнения: скаляр — одна инструкция; superscalar — до двух."""
+        if self.halted:
+            return
+
+        self._apply_irq_schedule_for_current_ticks()
+
+        if not self.superscalar:
+            self._step_scalar(log)
+        else:
+            self._step_superscalar(log)
 
     def _try_deliver_irq_after_instruction(self) -> None:
         """после инструкции: один pending IRQ → push return PC, jmp на вектор"""

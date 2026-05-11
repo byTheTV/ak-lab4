@@ -43,6 +43,11 @@ def main(argv: list[str] | None = None) -> int:
         metavar="PATH",
         help="JSON событий trap: tick, irq, value",
     )
+    p.add_argument(
+        "--superscalar",
+        action="store_true",
+        help="двойная выдача последовательных независимых инструкций (см. Cpu.superscalar)",
+    )
     args = p.parse_args(argv)
 
     try:
@@ -65,7 +70,14 @@ def main(argv: list[str] | None = None) -> int:
             print(f"--schedule: {e}", file=sys.stderr)
             return 2
 
-    cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=irq_sched)
+    cpu = Cpu(
+        im=im,
+        dm=dm,
+        pc=0,
+        sp=STACK_BASE,
+        irq_schedule=irq_sched,
+        superscalar=args.superscalar,
+    )
 
     if args.input is not None:
         try:
