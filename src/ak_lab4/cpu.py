@@ -51,6 +51,21 @@ _TICKS: dict[int, int] = {
 }
 
 
+def _opcode_breaks_dual_issue(op: int) -> bool:
+    """Вторая инструкция в паре не выдаётся вместе с ветвлением/остановом/портами IRQ."""
+    return op in (
+        int(Opcode.JMP),
+        int(Opcode.JZ),
+        int(Opcode.CALL),
+        int(Opcode.RET),
+        int(Opcode.HALT),
+        int(Opcode.EI),
+        int(Opcode.CLI),
+        int(Opcode.IN),
+        int(Opcode.OUT),
+    )
+
+
 @dataclass
 class Cpu:
     """Гарвард: IM/DM, адрес словами"""
