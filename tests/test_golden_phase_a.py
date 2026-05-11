@@ -6,8 +6,8 @@ import pytest
 
 from tests.golden_support import read_expected_output, run_case
 
-# prob1: полный перебор 3×3-значных с проверкой палиндрома — тяжёлый кейс
-_MAX_TICKS = {"prob1": 100_000_000}
+# prob1: 6-значные палиндромы + has_fact(√, кратность 11) — ~60M тактов
+_MAX_TICKS = {"prob1": 65_000_000}
 
 
 @pytest.mark.parametrize(

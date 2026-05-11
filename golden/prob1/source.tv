@@ -1,15 +1,23 @@
-; prob1: Project Euler #4 — наибольший палиндром p = a·b (100≤a,b≤999). Ответ 906609.
-; Перебор палиндромов abccba и abcba; has_fact — делитель в [100,999] и частное в [100,999].
-; Вложенный вызов (f x (g x …)) с тем же f нельзя: аргументы CALL пишут в слоты по порядку — progn/setq.
+; P = 100001a + 10010b + 1100c = 11·(9091a+910b+100c) ⇒ 11|P.
 
 (defun good_q (q)
   (if (> q 99) (if (< q 1000) 1 0) 0))
 
 (defun has_fact (p x)
   (if (< x 1000)
-      (if (eq 0 (mod p x))
-          (if (good_q (/ p x)) 1 (has_fact p (+ x 1)))
-          (has_fact p (+ x 1)))
+      (if (< p (* x x))
+          0
+          (if (eq 0 (mod p x))
+              (progn
+                (setq q (/ p x))
+                (if (good_q q)
+                    (if (eq 0 (mod x 11))
+                        1
+                        (if (eq 0 (mod q 11))
+                            1
+                            (has_fact p (+ x 1))))
+                    (has_fact p (+ x 1))))
+              (has_fact p (+ x 1))))
       0))
 
 (defun upd (p best)
@@ -38,27 +46,6 @@
         (loop_a6 (+ a 1) best_a6))
       best))
 
-(defun loop_c5 (a b c best)
-  (if (< c 10)
-      (progn
-        (setq best_c5 (upd (+ (+ (* 10001 a) (* 1010 b)) (* 100 c)) best))
-        (loop_c5 a b (+ c 1) best_c5))
-      best))
-
-(defun loop_b5 (a b best)
-  (if (< b 10)
-      (progn
-        (setq best_b5 (loop_c5 a b 0 best))
-        (loop_b5 a (+ b 1) best_b5))
-      best))
-
-(defun loop_a5 (a best)
-  (if (< a 10)
-      (progn
-        (setq best_a5 (loop_b5 a 0 best))
-        (loop_a5 (+ a 1) best_a5))
-      best))
-
 (defun out_u32 (w)
   (progn
     (out (mod w 256))
@@ -71,6 +58,6 @@
     0))
 
 (progn
-  (setq ans (loop_a5 1 (loop_a6 1 0)))
+  (setq ans (loop_a6 1 0))
   (out_u32 ans)
   0)
