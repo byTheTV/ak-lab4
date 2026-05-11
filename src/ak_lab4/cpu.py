@@ -62,6 +62,10 @@ class Cpu:
     ticks: int = 0
     halted: bool = False
 
+    # True: за один step — до двух последовательных инструкций (при отсутствии конфликтов).
+    # По умолчанию выключено — golden и старые тесты без изменений.
+    superscalar: bool = False
+
     # DATA_IN: очередь байт слева; пусто → на стек −1 (EOF)
     input_queue: deque[int] = field(default_factory=deque)
 
