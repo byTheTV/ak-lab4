@@ -50,6 +50,9 @@ _TICKS: dict[int, int] = {
     int(Opcode.CLI): 1,
 }
 
+_SHADOW_STORE_CAPACITY = 2
+_PARALLEL_FLUSH_TICKS = 1
+
 
 def _opcode_breaks_dual_issue(op: int) -> bool:
     """Вторая инструкция в паре не выдаётся вместе с ветвлением/остановом/портами IRQ."""
@@ -68,22 +71,36 @@ def _opcode_breaks_dual_issue(op: int) -> bool:
 
 def can_dual_issue(op0: int, op1: int) -> bool:
     """
-    Консервативная проверка независимости пары (MVP + расширение).
-    Разрешены только комбинации без конфликта по стеку для TOS.
+    Консервативная проверка независимости пары.
+    Разрешаем пары без конфликтов по стеку и без операций управления/портов.
     """
-    n0, n1 = int(Opcode.NOP), int(Opcode.PUSH_IMM)
+    if _opcode_breaks_dual_issue(op0) or _opcode_breaks_dual_issue(op1):
+        return False
+
+    n0 = int(Opcode.NOP)
+    n1 = int(Opcode.PUSH_IMM)
     d = int(Opcode.DUP)
-    if op0 == n0 and op1 == n0:
-        return True
-    if op0 == n1 and op1 == n1:
-        return True
-    if op0 == n1 and op1 == n0:
-        return True
-    if op0 == n0 and op1 == n1:
-        return True
-    if op0 == d and op1 == n0:
-        return True
-    return op0 == n0 and op1 == d
+    dr = int(Opcode.DROP)
+    ld = int(Opcode.LOAD)
+    st = int(Opcode.STORE)
+    sw = int(Opcode.SWAP)
+    allowed_pairs = {
+        (n0, n0),
+        (n0, n1),
+        (n1, n0),
+        (n1, n1),
+        (d, n0),
+        (n0, d),
+        (dr, n0),
+        (n0, dr),
+        (ld, n0),
+        (n0, ld),
+        (st, n0),
+        (n0, st),
+        (sw, n0),
+        (n0, sw),
+    }
+    return (op0, op1) in allowed_pairs
 
 
 @dataclass
@@ -122,6 +139,45 @@ class Cpu:
 
     # байт для первого IN в ISR после доставки IRQ
     _irq_delivered_byte: int | None = field(default=None, repr=False)
+    # AC_SHADOW для stack-варианта в superscalar-режиме
+    shadow_stores: list[tuple[int, int]] = field(default_factory=list, repr=False)
+    last_load_addr: int | None = field(default=None, repr=False)
+    last_load_value: int | None = field(default=None, repr=False)
+
+    def _invalidate_last_load(self) -> None:
+        self.last_load_addr = None
+        self.last_load_value = None
+
+    def _note_store_visibility(self, addr: int, value: int) -> None:
+        """Обновить кэш последней загрузки после записи в память/теневую очередь."""
+        if self.last_load_addr == addr:
+            self.last_load_value = value & 0xFFFFFFFF
+
+    def _read_from_dm_or_shadow(self, addr: int) -> int:
+        for sh_addr, sh_val in reversed(self.shadow_stores):
+            if sh_addr == addr:
+                return sh_val & 0xFFFFFFFF
+        return self.dm[addr] & 0xFFFFFFFF
+
+    def _flush_shadow_stores(
+        self,
+        log: TextIO | None = None,
+        *,
+        reason: str,
+    ) -> bool:
+        if not self.shadow_stores:
+            return False
+        if log is not None:
+            mode = "ISR" if self.interrupt_depth > 0 else "USR"
+            payload = "\t".join(f"{a}:{v:08X}" for a, v in self.shadow_stores)
+            log.write(f"{self.ticks}\tPAR_FLUSH\t{reason}\t{payload}\t{mode}\n")
+        for addr, value in self.shadow_stores:
+            a = self._ensure_dm_addr(addr)
+            self.dm[a] = value & 0xFFFFFFFF
+            self._note_store_visibility(a, value)
+        self.shadow_stores.clear()
+        self.ticks += _PARALLEL_FLUSH_TICKS
+        return True
 
     def _apply_irq_schedule_for_current_ticks(self) -> None:
         """события расписания на текущий такт"""
@@ -201,7 +257,13 @@ class Cpu:
     def _add_ticks(self, op: int) -> None:
         self.ticks += _TICKS.get(op, 1)
 
-    def _dispatch_opcode(self, insn_pc: int, op_byte: int, operand: int) -> None:
+    def _dispatch_opcode(
+        self,
+        insn_pc: int,
+        op_byte: int,
+        operand: int,
+        log: TextIO | None = None,
+    ) -> None:
         """Исполнить одну инструкцию с адреса insn_pc (next_pc = insn_pc+1 для линейного потока)."""
         next_pc = insn_pc + 1
         op = op_byte
@@ -218,39 +280,66 @@ class Cpu:
                 self.pc = next_pc
             case x if x == Opcode.DROP:
                 _ = self._pop()
+                self._invalidate_last_load()
                 self.pc = next_pc
             case x if x == Opcode.LOAD:
                 addr = self._pop()
                 a = self._ensure_dm_addr(addr)
-                self._push(self.dm[a])
+                if (
+                    self.superscalar
+                    and self.last_load_addr == a
+                    and self.last_load_value is not None
+                ):
+                    val = self.last_load_value & 0xFFFFFFFF
+                else:
+                    val = (
+                        self._read_from_dm_or_shadow(a)
+                        if self.superscalar
+                        else (self.dm[a] & 0xFFFFFFFF)
+                    )
+                self._push(val)
+                if self.superscalar:
+                    self.last_load_addr = a
+                    self.last_load_value = val
                 self.pc = next_pc
             case x if x == Opcode.STORE:
                 val = self._pop()
                 addr = self._pop()
                 a = self._ensure_dm_addr(addr)
-                self.dm[a] = val & 0xFFFFFFFF
+                v = val & 0xFFFFFFFF
+                if self.superscalar:
+                    if len(self.shadow_stores) >= _SHADOW_STORE_CAPACITY:
+                        self._flush_shadow_stores(log, reason="overflow")
+                    self.shadow_stores.append((a, v))
+                    self._note_store_visibility(a, v)
+                else:
+                    self.dm[a] = v
                 self.pc = next_pc
             case x if x == Opcode.SWAP:
                 top = self._pop()
                 below = self._pop()
                 self._push(top)
                 self._push(below)
+                self._invalidate_last_load()
                 self.pc = next_pc
             case x if x == Opcode.ADD:
                 x1 = self._pop()
                 y = self._pop()
                 self._push((y + x1) & 0xFFFFFFFF)
+                self._invalidate_last_load()
                 self.pc = next_pc
             case x if x == Opcode.SUB:
                 x1 = self._pop()
                 y = self._pop()
                 self._push((y - x1) & 0xFFFFFFFF)
+                self._invalidate_last_load()
                 self.pc = next_pc
             case x if x == Opcode.MUL:
                 x1 = self._pop()
                 y = self._pop()
                 prod = _signed32(y) * _signed32(x1)
                 self._push(_unsigned32(prod))
+                self._invalidate_last_load()
                 self.pc = next_pc
             case x if x == Opcode.DIV:
                 x1 = self._pop()
@@ -259,6 +348,7 @@ class Cpu:
                     raise CpuFault("деление на 0")
                 q = math.trunc(_signed32(y) / _signed32(x1))
                 self._push(_unsigned32(q))
+                self._invalidate_last_load()
                 self.pc = next_pc
             case x if x == Opcode.MOD:
                 x1 = self._pop()
@@ -268,11 +358,13 @@ class Cpu:
                 yi, xi = _signed32(y), _signed32(x1)
                 r = yi - math.trunc(yi / xi) * xi
                 self._push(_unsigned32(r))
+                self._invalidate_last_load()
                 self.pc = next_pc
             case x if x == Opcode.EQ:
                 x1 = self._pop()
                 y = self._pop()
                 self._push(1 if (y & 0xFFFFFFFF) == (x1 & 0xFFFFFFFF) else 0)
+                self._invalidate_last_load()
                 self.pc = next_pc
             case x if x == Opcode.SLT:
                 b = self._pop()
@@ -280,6 +372,7 @@ class Cpu:
                 self._push(
                     1 if _signed32(a & 0xFFFFFFFF) < _signed32(b & 0xFFFFFFFF) else 0,
                 )
+                self._invalidate_last_load()
                 self.pc = next_pc
             case x if x == Opcode.JMP:
                 target = operand & OPERAND_MASK
@@ -291,14 +384,17 @@ class Cpu:
                     self.pc = self._ensure_im_pc(target)
                 else:
                     self.pc = next_pc
+                self._invalidate_last_load()
             case x if x == Opcode.CALL:
                 target = operand & OPERAND_MASK
                 self._push(next_pc & 0xFFFFFFFF)
+                self._invalidate_last_load()
                 self.pc = self._ensure_im_pc(target)
             case x if x == Opcode.RET:
                 addr = self._pop()
                 if self.interrupt_depth > 0:
                     self.interrupt_depth -= 1
+                self._invalidate_last_load()
                 self.pc = self._ensure_im_pc(addr & 0xFFFFFFFF)
             case x if x == Opcode.IN:
                 port = operand & 0xFFFF
@@ -306,6 +402,7 @@ class Cpu:
                     pass  # резерв в v0 не трогаем
                 val = self._read_port_in(port)
                 self._push(_unsigned32(val))
+                self._invalidate_last_load()
                 self.pc = next_pc
             case x if x == Opcode.OUT:
                 val = self._pop()
@@ -316,6 +413,7 @@ class Cpu:
                     self.irq_enabled = (val & 0xFFFFFFFF) != 0
                 elif port == int(Port.IRQ_EOI):
                     pass
+                self._invalidate_last_load()
                 self.pc = next_pc
             case x if x == Opcode.EI:
                 self.irq_enabled = True
@@ -324,6 +422,8 @@ class Cpu:
                 self.irq_enabled = False
                 self.pc = next_pc
             case x if x == Opcode.HALT:
+                if self.superscalar:
+                    self._flush_shadow_stores(log, reason="halt")
                 self.halted = True
                 self.pc = next_pc
             case _:
@@ -341,10 +441,10 @@ class Cpu:
             mode = "ISR" if self.interrupt_depth > 0 else "USR"
             log.write(f"{self.ticks}\t{pc0}\t{word:08X}\t{mode}\n")
 
-        self._dispatch_opcode(pc0, op_byte, operand)
+        self._dispatch_opcode(pc0, op_byte, operand, log)
         self._add_ticks(op_byte)
         if not self.halted:
-            self._try_deliver_irq_after_instruction()
+            self._try_deliver_irq_after_instruction(log)
 
     def _step_superscalar(self, log: TextIO | None) -> None:
         """До двух последовательных инструкций за один step при отсутствии конфликтов."""
@@ -368,7 +468,7 @@ class Cpu:
         word1 = self.im[pc1] & 0xFFFFFFFF
         op1, od1 = unpack_word(word1)
 
-        if _opcode_breaks_dual_issue(op1) or op1 == int(Opcode.HALT):
+        if _opcode_breaks_dual_issue(op1):
             self._step_scalar(log)
             return
 
@@ -382,18 +482,18 @@ class Cpu:
                 f"{self.ticks}\tPAR\t{pc0}\t{word0:08X}\t{pc1}\t{word1:08X}\t{mode}\n",
             )
 
-        self._dispatch_opcode(pc0, op0, od0)
+        self._dispatch_opcode(pc0, op0, od0, log)
         if self.halted:
             self._add_ticks(op0)
             return
 
-        self._dispatch_opcode(pc1, op1, od1)
+        self._dispatch_opcode(pc1, op1, od1, log)
         tick0 = _TICKS.get(op0, 1)
         tick1 = _TICKS.get(op1, 1)
         self.ticks += tick0 if tick0 > tick1 else tick1
 
         if not self.halted:
-            self._try_deliver_irq_after_instruction()
+            self._try_deliver_irq_after_instruction(log)
 
     def step(self, log: TextIO | None = None) -> None:
         """одна «порция» исполнения: скаляр — одна инструкция; superscalar — до двух."""
@@ -407,7 +507,7 @@ class Cpu:
         else:
             self._step_superscalar(log)
 
-    def _try_deliver_irq_after_instruction(self) -> None:
+    def _try_deliver_irq_after_instruction(self, log: TextIO | None = None) -> None:
         """после инструкции: один pending IRQ → push return PC, jmp на вектор"""
         if self.ticks == 0:
             return
@@ -418,6 +518,8 @@ class Cpu:
         for irq in range(NUM_IRQ_LINES):
             if not self.irq_pending[irq]:
                 continue
+            if self.superscalar:
+                self._flush_shadow_stores(log, reason="irq")
             ret_pc = self.pc
             self._push(ret_pc & 0xFFFFFFFF)
             self.pc = self._read_vector_target(irq)

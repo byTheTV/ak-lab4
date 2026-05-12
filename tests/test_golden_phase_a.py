@@ -17,3 +17,16 @@ _MAX_TICKS = {"prob1": 65_000_000}
 def test_golden_program_output(case: str) -> None:
     cpu = run_case(case, max_ticks=_MAX_TICKS.get(case, 10_000_000))
     assert bytes(cpu.out_bytes) == read_expected_output(case)
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["hello", "cat", "hello_user_name", "pstr_two", "sort", "prob1"],
+)
+def test_golden_program_output_superscalar(case: str) -> None:
+    cpu = run_case(
+        case,
+        max_ticks=_MAX_TICKS.get(case, 10_000_000),
+        superscalar=True,
+    )
+    assert bytes(cpu.out_bytes) == read_expected_output(case)

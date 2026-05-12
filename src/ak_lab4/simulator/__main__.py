@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--superscalar",
         action="store_true",
-        help="двойная выдача последовательных независимых инструкций (см. Cpu.superscalar)",
+        help="двойная выдача + AC_SHADOW (deferred store, DLE, parallel flush)",
     )
     args = p.parse_args(argv)
 
