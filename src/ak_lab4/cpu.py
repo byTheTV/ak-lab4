@@ -51,7 +51,7 @@ _TICKS: dict[int, int] = {
 }
 
 _SHADOW_STORE_CAPACITY = 2
-_PARALLEL_FLUSH_TICKS = _TICKS[int(Opcode.STORE)]
+_PARALLEL_FLUSH_TICKS = 1
 
 
 def _opcode_breaks_dual_issue(op: int) -> bool:
@@ -77,43 +77,30 @@ def can_dual_issue(op0: int, op1: int) -> bool:
     if _opcode_breaks_dual_issue(op0) or _opcode_breaks_dual_issue(op1):
         return False
 
-    # В superscalar поддерживаем "легкие" инструкции, где зависимости по данным
-    # можно безопасно контролировать стековой сигнатурой.
-    allowed = {
-        int(Opcode.NOP),
-        int(Opcode.PUSH_IMM),
-        int(Opcode.DUP),
-        int(Opcode.DROP),
-        int(Opcode.LOAD),
-        int(Opcode.STORE),
-        int(Opcode.SWAP),
+    n0 = int(Opcode.NOP)
+    n1 = int(Opcode.PUSH_IMM)
+    d = int(Opcode.DUP)
+    dr = int(Opcode.DROP)
+    ld = int(Opcode.LOAD)
+    st = int(Opcode.STORE)
+    sw = int(Opcode.SWAP)
+    allowed_pairs = {
+        (n0, n0),
+        (n0, n1),
+        (n1, n0),
+        (n1, n1),
+        (d, n0),
+        (n0, d),
+        (dr, n0),
+        (n0, dr),
+        (ld, n0),
+        (n0, ld),
+        (st, n0),
+        (n0, st),
+        (sw, n0),
+        (n0, sw),
     }
-    if op0 not in allowed or op1 not in allowed:
-        return False
-
-    required = {
-        int(Opcode.NOP): 0,
-        int(Opcode.PUSH_IMM): 0,
-        int(Opcode.DUP): 1,
-        int(Opcode.DROP): 1,
-        int(Opcode.LOAD): 1,
-        int(Opcode.STORE): 2,
-        int(Opcode.SWAP): 2,
-    }
-    delta = {
-        int(Opcode.NOP): 0,
-        int(Opcode.PUSH_IMM): 1,
-        int(Opcode.DUP): 1,
-        int(Opcode.DROP): -1,
-        int(Opcode.LOAD): 0,
-        int(Opcode.STORE): -2,
-        int(Opcode.SWAP): 0,
-    }
-    depth = 0
-    if required[op0] > depth:
-        return False
-    depth += delta[op0]
-    return required[op1] <= depth
+    return (op0, op1) in allowed_pairs
 
 
 @dataclass
