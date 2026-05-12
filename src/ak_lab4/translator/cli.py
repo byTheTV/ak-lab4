@@ -19,7 +19,7 @@ _CLI_EPILOG = """\
 
 Trap по тактам (JSON):
   … simulator … --schedule irq.json
-  подробнее docs/io-trap-port.md
+  (описание портов IRQ и журнала — в README.md, разделы про модель и ввод-вывод.)
 """
 
 

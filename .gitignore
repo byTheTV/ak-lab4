@@ -31,5 +31,5 @@ junit.xml
 htmlcov/
 .idea/
 .vscode/
-README.md
+# Локальные черновики документации — в репозиторий не коммитим (отчёт — только README.md в корне).
 docs/
