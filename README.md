@@ -286,7 +286,12 @@ lisp | stack | harv | hw | tick | binary | trap | port | pstr | prob1 | supersca
 
 ### Схемы DataPath и ControlUnit (пункт `hw` варианта)
 
-В репозитории поставляется **программная модель** (`cpu.py`), согласованная по тактам и семантике с ТЗ. **Аппаратные** схемы (Quartus, блоки АЛУ, мультиплексоры, сигналы управления) по курсу оформляются отдельно и должны отражать **железную** декомпозицию, а не структуру каталогов Python; в отчёт вставляются изображения из каталога `hw`, когда готовы (см. требования к читаемости в [lab4-task.md](lab4-task.md)).
+Аппаратные схемы оформлены отдельно от программной модели:
+
+- [hw/datapath.md](hw/datapath.md) — схема тракта данных, регистры, флаги и линии управления;
+- [hw/control_unit.md](hw/control_unit.md) — схема hardwired ControlUnit, состояния автомата и логика IRQ/trap.
+
+Схемы показывают именно аппаратную декомпозицию (`PC`, `SP`, `IR`, `TOS/NOS`, `ALU`, `IM/DM`, `Port I/O`, `IRQ logic`) и связаны с tick-моделью выполнения.
 
 ### Особенности моделирования
 
@@ -337,6 +342,7 @@ python -m ak_lab4.simulator code.bin data.bin --input golden/hello_user_name/inp
 | `src/ak_lab4/cpu.py` | модель CPU, такты, superscalar |
 | `src/ak_lab4/simulator/` | CLI симулятора |
 | `src/ak_lab4/loader.py` | чтение/запись LE bin |
+| `hw/` | схемы `DataPath` и `ControlUnit` для пункта `hw` |
 | `golden/` | эталоны; см. [golden/README.md](golden/README.md) |
 | `.github/workflows/ci.yml` | CI |
 
