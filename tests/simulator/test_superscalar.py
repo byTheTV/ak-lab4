@@ -101,7 +101,7 @@ def test_deferred_store_visible_only_after_flush_on_halt() -> None:
     im[1] = _word(Opcode.PUSH_IMM, value)
     im[2] = _word(Opcode.STORE)
     im[3] = _word(Opcode.HALT)
-    dm = [0] * 256
+    dm = [0] * 65536
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, superscalar=True)
 
     cpu.step()  # push addr + push value
@@ -123,7 +123,7 @@ def test_dead_load_elimination_uses_cached_value() -> None:
     im[2] = _word(Opcode.PUSH_IMM, addr)
     im[3] = _word(Opcode.LOAD)
     im[4] = _word(Opcode.HALT)
-    dm = [0] * 256
+    dm = [0] * 65536
     dm[addr] = 11
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, superscalar=True)
 
@@ -148,7 +148,7 @@ def test_parallel_flush_on_shadow_overflow_logs_event() -> None:
     im[7] = _word(Opcode.PUSH_IMM, 3)
     im[8] = _word(Opcode.STORE)
     im[9] = _word(Opcode.HALT)
-    dm = [0] * 256
+    dm = [0] * 65536
     buf = StringIO()
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, superscalar=True)
 
@@ -174,7 +174,7 @@ def test_irq_delivery_flushes_shadow_before_isr() -> None:
     im[12] = _word(Opcode.STORE)
     im[13] = _word(Opcode.HALT)
     im[20] = _word(Opcode.RET)
-    dm = [0] * 512
+    dm = [0] * 65536
     buf = StringIO()
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, superscalar=True)
 
@@ -203,8 +203,8 @@ def test_superscalar_tick_gain_on_shadow_workload() -> None:
     im[7] = _word(Opcode.PUSH_IMM, 3)
     im[8] = _word(Opcode.STORE)
     im[9] = _word(Opcode.HALT)
-    dm0 = [0] * 256
-    dm1 = [0] * 256
+    dm0 = [0] * 65536
+    dm1 = [0] * 65536
     scalar = Cpu(im=im, dm=dm0, pc=0, sp=STACK_BASE, superscalar=False)
     superc = Cpu(im=im, dm=dm1, pc=0, sp=STACK_BASE, superscalar=True)
 

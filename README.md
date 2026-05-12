@@ -204,14 +204,15 @@ lisp | stack | harv | hw | tick | binary | trap | port | pstr | prob1 | supersca
 
 Требования ТЗ: не менее двух инструкций параллельно, **зависимости по данным**, видимость в **журнале**, влияние на производительность.
 
-Реализация:
+Реализация (по паттерну `set/swap/flush` из методички для `stack`):
 
-1. При `Cpu.superscalar=True` за один вызов `step` читается окно **двух слов** подряд из IM (`PC` и `PC+1`).
-2. Вторая инструкция **не** выдаётся вместе с первой, если: обработка в **ISR** (`interrupt_depth > 0`); любая из двух — ветвление/ввод-вывод/останов/IRQ-управление (`JMP`, `JZ`, `CALL`, `RET`, `HALT`, `EI`, `CLI`, `IN`, `OUT`); вторая — `HALT`; выход за IM.
-3. **Зависимости:** функция `can_dual_issue(op0, op1)` разрешает только безопасные пары по вершине стека (консервативно: в основном `NOP` / `PUSH_IMM` и часть комбинаций с `DUP` — см. код).
-4. **Такты:** при двойной выдаче `ticks += max(t0, t1)`.
-5. **Журнал:** строка с полем `PAR` и двумя парами `PC`/`word`, например:  
-   `ticks<TAB>PAR<TAB>pc0<TAB>word0<TAB>pc1<TAB>word1<TAB>USR|ISR`
+1. При `Cpu.superscalar=True` за один вызов `step` читается окно **двух слов** подряд из IM (`PC` и `PC+1`), и для безопасных пар возможна двойная выдача.
+2. Для `STORE` включён **deferred store**: запись сначала попадает в `shadow_stores` (очередь отложенных commit-ов), а не сразу в DM.
+3. Для `LOAD` включён **dead load elimination**: повторный `LOAD` того же адреса может взять значение из `last_load_addr/last_load_value` без чтения DM.
+4. Когда буфер отложенных записей заполнен, выполняется **parallel flush**: обе shadow-записи коммитятся в память одним событием `PAR_FLUSH`.
+5. Перед входом в ISR и на `HALT` все отложенные store принудительно сбрасываются, чтобы архитектурное состояние DM было консистентным.
+6. **Такты:** при двойной выдаче `ticks += max(t0, t1)`; `PAR_FLUSH` добавляет отдельный flush-такт.
+7. **Журнал:** помимо строки `PAR`, добавлена строка `PAR_FLUSH` с причиной (`overflow`/`irq`/`halt`) и списком пар `addr:value`.
 
 По умолчанию `superscalar=False`, чтобы **golden** не менялись. Включение: конструктор `Cpu` или флаг **`--superscalar`** у симулятора.
 
@@ -256,7 +257,7 @@ lisp | stack | harv | hw | tick | binary | trap | port | pstr | prob1 | supersca
 | `--max-ticks N` | лимит тактов (по умолчанию 10⁷) |
 | `--input PATH\|-` | байты во входную очередь порта `DATA_IN`; `-` — stdin |
 | `--schedule PATH` | JSON массив событий `{tick, irq, value}` для **trap** |
-| `--superscalar` | включить двойную выдачу (см. выше) |
+| `--superscalar` | включить двойную выдачу + AC_SHADOW (`deferred store`, `DLE`, `parallel flush`) |
 
 **Выход в консоль:** при успешном `HALT` — строка вида `HALT ticks=… PC=… SP=…`; байты вывода накапливаются в модели и в golden сравниваются с эталоном.
 
@@ -268,6 +269,8 @@ lisp | stack | harv | hw | tick | binary | trap | port | pstr | prob1 | supersca
   `ticks<TAB>pc<TAB>word<TAB>USR|ISR`
 - **Двойная выдача:**  
   `ticks<TAB>PAR<TAB>pc0<TAB>word0<TAB>pc1<TAB>word1<TAB>USR|ISR`
+- **Сброс shadow store-ов:**  
+  `ticks<TAB>PAR_FLUSH<TAB>reason<TAB>addr0:val0<TAB>addr1:val1<TAB>USR|ISR`
 
 ### Trap (расписание IRQ)
 
@@ -299,7 +302,7 @@ lisp | stack | harv | hw | tick | binary | trap | port | pstr | prob1 | supersca
 
 Запуск: `pytest` (см. [ci.yml](.github/workflows/ci.yml): ruff, mypy, pytest).
 
-Отдельно: [tests/simulator/test_superscalar.py](tests/simulator/test_superscalar.py) — двойная выдача, порядок на стеке, блокировка по control, строка `PAR` в логе.
+Отдельно: [tests/simulator/test_superscalar.py](tests/simulator/test_superscalar.py) — двойная выдача, `deferred store`, `DLE`, `PAR_FLUSH` (`overflow`/`irq`/`halt`) и сравнение `ticks` scalar vs superscalar.
 
 ### Golden-тесты
 
