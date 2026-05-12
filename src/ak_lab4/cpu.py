@@ -285,10 +285,18 @@ class Cpu:
             case x if x == Opcode.LOAD:
                 addr = self._pop()
                 a = self._ensure_dm_addr(addr)
-                if self.superscalar and self.last_load_addr == a and self.last_load_value is not None:
+                if (
+                    self.superscalar
+                    and self.last_load_addr == a
+                    and self.last_load_value is not None
+                ):
                     val = self.last_load_value & 0xFFFFFFFF
                 else:
-                    val = self._read_from_dm_or_shadow(a) if self.superscalar else (self.dm[a] & 0xFFFFFFFF)
+                    val = (
+                        self._read_from_dm_or_shadow(a)
+                        if self.superscalar
+                        else (self.dm[a] & 0xFFFFFFFF)
+                    )
                 self._push(val)
                 if self.superscalar:
                     self.last_load_addr = a
