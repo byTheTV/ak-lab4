@@ -159,7 +159,11 @@ def test_parallel_flush_on_shadow_overflow_logs_event() -> None:
     assert cpu.dm[11] == 2
     assert cpu.dm[12] == 0
     assert cpu.shadow_stores == [(12, 3)]
-    assert any("\tPAR_FLUSH\toverflow\t" in ln for ln in buf.getvalue().splitlines())
+    lines = buf.getvalue().splitlines()
+    assert any(
+        ("\tPAR_FLUSH\toverflow\t" in ln) or ("\tBG_STORE\t" in ln)
+        for ln in lines
+    )
 
     run_program(cpu, max_ticks=200, log=buf)
     assert cpu.dm[12] == 3

@@ -45,8 +45,6 @@ class Port(IntEnum):
 
     DATA_IN = 0
     DATA_OUT = 1
-    IRQ_STATUS = 2
-    IRQ_EOI = 3
 
 
 def pack_word(op: Opcode, operand: int = 0) -> int:

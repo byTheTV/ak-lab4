@@ -24,7 +24,7 @@ flowchart LR
     RESMUX{"push_src<br/>ALU<br/>DM_dout<br/>imm32<br/>IN_data<br/>ret_pc"}
 
     %% ====== Port I/O ======
-    IO[("Port I/O<br/>DATA_IN queue<br/>DATA_OUT buf<br/>IRQ_STATUS")]
+    IO[("Port I/O<br/>DATA_IN queue<br/>DATA_OUT buf")]
 
     %% ====== Интерфейс к Control Unit ======
     IRO[/"IR.operand[23:0]<br/>(из CU)"/]
@@ -56,7 +56,7 @@ flowchart LR
     RESMUX -- "push_val" --> DM
 
     %% ====== out path ======
-    A -- "out_byte / irq_ctl_value" --> IO
+    A -- "out_byte" --> IO
 
     %% ====== значения в CU ======
     A -- "cond/target for JZ/RET" --> CU

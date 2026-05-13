@@ -24,7 +24,7 @@ def load_words_le(path: Path) -> list[int]:
 
 
 def write_words_le(path: Path, words: list[int]) -> None:
-    """Запись слов LE (для транслятора и тестов)"""
+    """Запись слов LE"""
     if not words:
         path.write_bytes(b"")
         return

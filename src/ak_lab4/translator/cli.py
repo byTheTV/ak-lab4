@@ -9,19 +9,6 @@ from pathlib import Path
 from ak_lab4.loader import write_words_le
 from ak_lab4.translator import CodegenError, LexError, ParseError, compile_forms, parse_many
 
-_CLI_EPILOG = """\
-Пример:
-  python -m ak_lab4.translator prog.tv -o code.bin --data-out data.bin
-  python -m ak_lab4.simulator code.bin data.bin
-
-Ввод для порта DATA_IN:
-  … simulator … --input stdin.bin
-
-Trap по тактам (JSON):
-  … simulator … --schedule irq.json
-  (описание портов IRQ и журнала — в README.md, разделы про модель и ввод-вывод.)
-"""
-
 
 def write_listing(path: Path, words: list[int]) -> None:
     lines = [f"{i} - {w:08X}" for i, w in enumerate(words)]
@@ -30,9 +17,7 @@ def write_listing(path: Path, words: list[int]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        description="исходник → code.bin; несколько форм подряд — как один progn",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=_CLI_EPILOG,
+        description="исходник -> code.bin; несколько форм подряд - как один progn",
     )
     p.add_argument("input", type=Path, help="файл с программой")
     p.add_argument(

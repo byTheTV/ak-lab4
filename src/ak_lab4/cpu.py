@@ -50,7 +50,8 @@ _TICKS: dict[int, int] = {
     int(Opcode.CLI): 1,
 }
 
-_SHADOW_STORE_CAPACITY = 2
+_SHADOW_STORE_CAPACITY = 1
+_SHADOW_STORE_TICKS = 2
 _PARALLEL_FLUSH_TICKS = 1
 
 
@@ -64,7 +65,6 @@ def _opcode_breaks_dual_issue(op: int) -> bool:
         int(Opcode.HALT),
         int(Opcode.EI),
         int(Opcode.CLI),
-        int(Opcode.IN),
         int(Opcode.OUT),
     )
 
@@ -84,6 +84,14 @@ def can_dual_issue(op0: int, op1: int) -> bool:
     ld = int(Opcode.LOAD)
     st = int(Opcode.STORE)
     sw = int(Opcode.SWAP)
+    add = int(Opcode.ADD)
+    sub = int(Opcode.SUB)
+    mul = int(Opcode.MUL)
+    div = int(Opcode.DIV)
+    mod = int(Opcode.MOD)
+    eq = int(Opcode.EQ)
+    slt = int(Opcode.SLT)
+    inn = int(Opcode.IN)
     allowed_pairs = {
         (n0, n0),
         (n0, n1),
@@ -99,6 +107,17 @@ def can_dual_issue(op0: int, op1: int) -> bool:
         (n0, st),
         (sw, n0),
         (n0, sw),
+        (n1, st),
+        (d, st),
+        (ld, st),
+        (add, st),
+        (sub, st),
+        (mul, st),
+        (div, st),
+        (mod, st),
+        (eq, st),
+        (slt, st),
+        (inn, st),
     }
     return (op0, op1) in allowed_pairs
 
@@ -141,6 +160,7 @@ class Cpu:
     _irq_delivered_byte: int | None = field(default=None, repr=False)
     # AC_SHADOW для stack-варианта в superscalar-режиме
     shadow_stores: list[tuple[int, int]] = field(default_factory=list, repr=False)
+    shadow_busy_ticks: int = field(default=0, repr=False)
     last_load_addr: int | None = field(default=None, repr=False)
     last_load_value: int | None = field(default=None, repr=False)
 
@@ -154,10 +174,27 @@ class Cpu:
             self.last_load_value = value & 0xFFFFFFFF
 
     def _read_from_dm_or_shadow(self, addr: int) -> int:
-        for sh_addr, sh_val in reversed(self.shadow_stores):
+        if self.shadow_stores:
+            sh_addr, sh_val = self.shadow_stores[0]
             if sh_addr == addr:
                 return sh_val & 0xFFFFFFFF
         return self.dm[addr] & 0xFFFFFFFF
+
+    def _tick_shadow_background(self, log: TextIO | None = None) -> None:
+        """Фоновая запись из shadow в DM по 1 шагу симулятора."""
+        if not self.shadow_stores or self.shadow_busy_ticks <= 0:
+            return
+        self.shadow_busy_ticks -= 1
+        if self.shadow_busy_ticks != 0:
+            return
+        addr, value = self.shadow_stores[0]
+        a = self._ensure_dm_addr(addr)
+        self.dm[a] = value & 0xFFFFFFFF
+        self._note_store_visibility(a, value)
+        if log is not None:
+            mode = "ISR" if self.interrupt_depth > 0 else "USR"
+            log.write(f"{self.ticks}\tBG_STORE\t{a}:{value & 0xFFFFFFFF:08X}\t{mode}\n")
+        self.shadow_stores.clear()
 
     def _flush_shadow_stores(
         self,
@@ -176,6 +213,7 @@ class Cpu:
             self.dm[a] = value & 0xFFFFFFFF
             self._note_store_visibility(a, value)
         self.shadow_stores.clear()
+        self.shadow_busy_ticks = 0
         self.ticks += _PARALLEL_FLUSH_TICKS
         return True
 
@@ -214,8 +252,6 @@ class Cpu:
             if self.input_queue:
                 return self.input_queue.popleft() & 0xFF
             return -1
-        if port == int(Port.IRQ_STATUS):
-            return ((self.interrupt_depth & 0xFF) << 8) | (1 if self.irq_enabled else 0)
         return 0
 
     def _ensure_dm_addr(self, addr: int) -> int:
@@ -311,6 +347,7 @@ class Cpu:
                     if len(self.shadow_stores) >= _SHADOW_STORE_CAPACITY:
                         self._flush_shadow_stores(log, reason="overflow")
                     self.shadow_stores.append((a, v))
+                    self.shadow_busy_ticks = _SHADOW_STORE_TICKS
                     self._note_store_visibility(a, v)
                 else:
                     self.dm[a] = v
@@ -409,10 +446,6 @@ class Cpu:
                 port = operand & 0xFFFF
                 if port == int(Port.DATA_OUT):
                     self.out_bytes.append(val & 0xFF)
-                elif port == int(Port.IRQ_STATUS):
-                    self.irq_enabled = (val & 0xFFFFFFFF) != 0
-                elif port == int(Port.IRQ_EOI):
-                    pass
                 self._invalidate_last_load()
                 self.pc = next_pc
             case x if x == Opcode.EI:
@@ -500,6 +533,8 @@ class Cpu:
         if self.halted:
             return
 
+        if self.superscalar:
+            self._tick_shadow_background(log)
         self._apply_irq_schedule_for_current_ticks()
 
         if not self.superscalar:
