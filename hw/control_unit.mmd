@@ -1,0 +1,66 @@
+%% Hardwired CU, согласованный с src/ak_lab4/cpu.py (tick-level).
+%% Условные обозначения:
+%%   [/X/]  - регистр
+%%   [(M)]  - память
+%%   {MUX}  - мультиплексор
+%%   -->    - данные
+%%   -.->   - управляющий бандл
+flowchart LR
+    %% ====== Основной тракт выборки ======
+    PCMUX{"PC_mux<br/>0:PC+1<br/>1:operand (JMP/CALL)<br/>2:stack_val (RET/JZ)<br/>3:irq_target"}
+    PC[/"PC (16)"/]
+    PINC["+1"]
+    IM[("IM<br/>65536 x 32")]
+    IRW["instr_word = IM[PC]"]
+    OPC["opcode = word[31:24]"]
+    OPR["operand = word[23:0]"]
+    DEC["decode_and_execute<br/>(hardwired FSM в коде)"]
+    TICK["tick adder<br/>_TICKS[opcode]"]
+
+    %% ====== IRQ контроллер ======
+    subgraph IRQC["IRQ controller (trap)"]
+        direction TB
+        PEND[/"pending[7..0]"/]
+        EN[/"irq_enabled"/]
+        DEPTH[/"interrupt_depth"/]
+        PRIO["priority encoder<br/>(min irq#)"]
+        IRQRDY["irq_ready =<br/>en &amp; (depth==0) &amp; |pending"]
+        VECI["vec_idx = 1 + irq#"]
+        VECR["vector reader:<br/>IM[vec_idx] must be JMP<br/>irq_target = operand"]
+    end
+    IRQEXT[/"ext IRQ events<br/>(--schedule)"/]
+
+    %% ====== DataPath как единый блок ======
+    DP(["DataPath<br/>см. datapath.mmd"])
+
+    %% ====== Связи выборки/декодирования ======
+    PC --> PINC --> PCMUX
+    PCMUX --> PC
+    PC --> IM --> IRW
+    IRW --> OPC
+    IRW --> OPR
+    OPC --> DEC
+    OPR --> DEC
+    OPR -- "target for JMP/CALL" --> PCMUX
+    OPC --> TICK
+    TICK --> DEC
+
+    %% ====== Связи с DataPath ======
+    DEC -. "stack ops, dm/io, alu cmd" .-> DP
+    DP -- "stack_val (RET/JZ cond)" --> DEC
+    DP -- "stack_val (RET target)" --> PCMUX
+    DEC -- "call/irq return PC" --> DP
+
+    %% ====== IRQ тракт ======
+    IRQEXT --> PEND
+    PEND --> PRIO
+    EN --> PRIO
+    DEPTH --> PRIO
+    PRIO --> IRQRDY
+    EN --> IRQRDY
+    DEPTH --> IRQRDY
+    IRQRDY --> DEC
+    PRIO --> VECI --> VECR --> PCMUX
+
+    %% ====== Управление регистрами CU ======
+    DEC -. "pc_sel/latch_pc,<br/>ei/cli,<br/>interrupt_depth +/- ,<br/>irq_pending clear" .-> PC

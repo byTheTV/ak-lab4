@@ -1,0 +1,65 @@
+%% DataPath, согласованный с src/ak_lab4/cpu.py.
+%% Стек хранится в DM, SP указывает на следующую свободную ячейку.
+%% Условные обозначения:
+%%   [/X/]  - регистр
+%%   [(M)]  - память
+%%   {MUX}  - мультиплексор
+%%   -->    - данные
+%%   -.->   - управляющий бандл
+flowchart LR
+    %% ====== Регистры/буферы ======
+    SP[/"SP (16)"/]
+    A[/"A (pop#1)"/]
+    B[/"B (pop#2)"/]
+    TMP[/"TMP"/]
+
+    %% ====== Память данных ======
+    DM[("DM<br/>65536 x 32<br/>single-port")]
+    SPSEL{"addr_sel<br/>SP<br/>SP-1<br/>A(addr)<br/>imm24(abs)"}
+    SPU["SP update<br/>+1 / -1"]
+
+    %% ====== ALU и immediate ======
+    ALU["ALU<br/>ADD SUB MUL DIV MOD EQ SLT"]
+    SEXT["sign_ext<br/>24 -> 32"]
+    RESMUX{"push_src<br/>ALU<br/>DM_dout<br/>imm32<br/>IN_data<br/>ret_pc"}
+
+    %% ====== Port I/O ======
+    IO[("Port I/O<br/>DATA_IN queue<br/>DATA_OUT buf<br/>IRQ_STATUS")]
+
+    %% ====== Интерфейс к Control Unit ======
+    IRO[/"IR.operand[23:0]<br/>(из CU)"/]
+    CU(["Control Unit<br/>см. control_unit.mmd"])
+
+    %% ====== Базовые связи стека ======
+    SP --> SPU --> SP
+    SP --> SPSEL
+    A --> SPSEL
+    IRO --> SPSEL
+    SPSEL -- "addr" --> DM
+    DM -- "dout" --> TMP
+
+    %% pop/pop2: чтение из DM в A/B через TMP
+    TMP --> A
+    TMP --> B
+
+    %% ====== Арифметика ======
+    A --> ALU
+    B --> ALU
+    ALU --> RESMUX
+
+    %% ====== imm / I/O / return pc ======
+    IRO --> SEXT --> RESMUX
+    IO -- "in_data" --> RESMUX
+    CU -- "return_pc (CALL/IRQ)" --> RESMUX
+
+    %% ====== push path ======
+    RESMUX -- "push_val" --> DM
+
+    %% ====== out path ======
+    A -- "out_byte / irq_ctl_value" --> IO
+
+    %% ====== значения в CU ======
+    A -- "cond/target for JZ/RET" --> CU
+
+    %% ====== Бандл управления ======
+    CU -. "stack_pop/push, sp_delta,<br/>dm_re/we, addr_sel,<br/>alu_op,<br/>in_en/out_en, port_sel" .-> DM
