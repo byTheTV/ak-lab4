@@ -14,7 +14,7 @@ def load_words_le(path: Path) -> list[int]:
     """LE-слова из файла; длина должна делиться на 4"""
     data = path.read_bytes()
     if len(data) % 4 != 0:
-        msg = f"{path}: {len(data)} байт — размер не кратен 4"
+        msg = f"{path}: {len(data)} байт - размер не кратен 4"
         raise LoadError(msg)
     n = len(data) // 4
     if n == 0:
@@ -24,7 +24,7 @@ def load_words_le(path: Path) -> list[int]:
 
 
 def write_words_le(path: Path, words: list[int]) -> None:
-    """Запись слов LE (для транслятора и тестов)"""
+    """Запись слов LE"""
     if not words:
         path.write_bytes(b"")
         return

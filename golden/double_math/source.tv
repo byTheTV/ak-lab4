@@ -1,0 +1,17 @@
+(progn
+  ; 64-bit addition over two 32-bit limbs: (hi:lo) + (hi:lo)
+  ; (1:FFFFFFFF) + (2:00000001) = (4:00000000)
+  (setq a_hi 1)
+  (setq a_lo -1)
+  (setq b_hi 2)
+  (setq b_lo 1)
+
+  (setq sum_lo (+ a_lo b_lo))
+  (setq carry (if (eq sum_lo 0) 1 0))
+  (setq sum_hi (+ (+ a_hi b_hi) carry))
+
+  ; Emit as text: "0 4\n"
+  (out (+ sum_lo 48))
+  (out 32)
+  (out (+ sum_hi 48))
+  (out 10))

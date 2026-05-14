@@ -1,4 +1,4 @@
-"""Golden: parse → compile → run, сверка с expected_output.txt"""
+"""Golden: parse -> compile -> run, сверка с expected_output.txt"""
 
 from __future__ import annotations
 

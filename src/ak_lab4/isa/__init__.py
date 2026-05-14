@@ -45,8 +45,6 @@ class Port(IntEnum):
 
     DATA_IN = 0
     DATA_OUT = 1
-    IRQ_STATUS = 2
-    IRQ_EOI = 3
 
 
 def pack_word(op: Opcode, operand: int = 0) -> int:
@@ -61,7 +59,7 @@ def unpack_word(word: int) -> tuple[int, int]:
 
 
 def sign_extend_operand_i(operand: int) -> int:
-    """24-бит знаковый операнд → int32"""
+    """24-бит знаковый операнд -> int32"""
     o = operand & OPERAND_MASK
     if o & 0x800000:
         return o - 0x1000000

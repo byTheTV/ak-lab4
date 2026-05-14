@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
         "--input",
         metavar="PATH|-",
         default=None,
-        help="байты в DATA_IN; «-» — весь stdin",
+        help='байты в DATA_IN; "-" весь stdin',
     )
     p.add_argument(
         "--schedule",
@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
             log_file.close()
 
     if not cpu.halted:
-        print("упёрлись в лимит тактов — HALT не был", file=sys.stderr)
+        print("упёрлись в лимит тактов - HALT не был", file=sys.stderr)
         return 1
     print(f"HALT ticks={cpu.ticks} PC={cpu.pc} SP=0x{cpu.sp:X}")
     return 0

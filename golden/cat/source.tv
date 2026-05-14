@@ -1,4 +1,4 @@
-; Golden cat: копирование stdin → stdout через порты (рекурсия, EOF = -1).
+; Golden cat: копирование stdin -> stdout через порты (рекурсия, EOF = -1).
 
 (defun cat ()
   (progn

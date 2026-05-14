@@ -26,7 +26,6 @@ class Token:
     kind: TokKind
     text: str
     loc: SourceLoc
-    # у INT — значение, у остальных не используется
     int_value: int | None = None
 
 
@@ -37,7 +36,7 @@ class LexError(ValueError):
 
 
 def tokenize(source: str) -> list[Token]:
-    """Токены по тексту, пробелы и комментарии ; … до конца строки пропускаются"""
+    """Токены по тексту, пробелы и комментарии ; ... до конца строки пропускаются"""
     i = 0
     line = 1
     col = 1
@@ -95,7 +94,6 @@ def tokenize(source: str) -> list[Token]:
                 raise LexError("строка без закрывающей кавычки", start_loc)
             continue
 
-        # число: [0-9]+ или явный знак +/-
         if c.isdigit() or (c in "+-" and i + 1 < n and source[i + 1].isdigit()):
             sign = 1
             j = i
@@ -115,7 +113,6 @@ def tokenize(source: str) -> list[Token]:
             i = j
             continue
 
-        # символ: до разделителя
         j = i
         while j < n and source[j] not in ' \t\r\n();"':
             j += 1
