@@ -21,7 +21,6 @@ def test_run_add_then_halt() -> None:
 
 
 def test_load_store() -> None:
-    # DM[0x100] = 42 до исполнения - через data.bin?
     data_words = [0] * 0x100 + [42]
     code_words = [
         pack_word(Opcode.PUSH_IMM, 0x100),
@@ -37,7 +36,7 @@ def test_load_store() -> None:
 
 
 def test_max_ticks_exceeded() -> None:
-    code_words = [pack_word(Opcode.NOP, 0)]  # бесконечный цикл
+    code_words = [pack_word(Opcode.NOP, 0)]
     im, dm = init_memory_from_segments(code_words, [])
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE)
     try:
