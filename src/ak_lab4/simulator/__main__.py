@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
         "--input",
         metavar="PATH|-",
         default=None,
-        help="байты в DATA_IN; "-" - весь stdin",
+        help='байты в DATA_IN; весь stdin',
     )
     p.add_argument(
         "--schedule",
