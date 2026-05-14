@@ -20,11 +20,3 @@ def test_load_store_roundtrip() -> None:
         "(progn (store 10 42) (out (load 10)))",
     )
     assert cpu.out_bytes == [42]
-
-
-def test_store_in_progn_with_read_el_shape() -> None:
-    """регрессия: store не должен снимать ret с стека внутри progn"""
-    cpu = _run(
-        "(progn (store 20 7) (out (load 20)))",
-    )
-    assert cpu.out_bytes == [7]
