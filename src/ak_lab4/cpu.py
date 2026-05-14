@@ -122,6 +122,16 @@ def can_dual_issue(op0: int, op1: int) -> bool:
     return (op0, op1) in allowed_pairs
 
 
+def _blocked_by_shadow_busy(op0: int, op1: int, shadow_busy_ticks: int) -> bool:
+    """
+    Приближение к модели с конвейерной занятостью памяти:
+    пока фоновой store не завершён, не выдаём пару со вторым STORE.
+    """
+    if shadow_busy_ticks <= 0:
+        return False
+    return op1 == int(Opcode.STORE)
+
+
 @dataclass
 class Cpu:
     """Гарвард: IM/DM, адрес словами"""
@@ -136,6 +146,7 @@ class Cpu:
     # True: за один step — до двух последовательных инструкций (при отсутствии конфликтов).
     # По умолчанию выключено — golden и старые тесты без изменений.
     superscalar: bool = False
+    stall_ticks: int = 0
 
     # DATA_IN: очередь байт слева; пусто → на стек −1 (EOF)
     input_queue: deque[int] = field(default_factory=deque)
@@ -289,9 +300,6 @@ class Cpu:
             raise CpuFault(msg)
         a = self._ensure_dm_addr(self.sp - 1)
         return self.dm[a] & 0xFFFFFFFF
-
-    def _add_ticks(self, op: int) -> None:
-        self.ticks += _TICKS.get(op, 1)
 
     def _dispatch_opcode(
         self,
@@ -465,7 +473,7 @@ class Cpu:
                 raise CpuFault(msg)
 
     def _step_scalar(self, log: TextIO | None) -> None:
-        """Одна инструкция по PC (классическое поведение)."""
+        """Выдать и исполнить одну инструкцию (без учёта фона/IRQ/stall)."""
         pc0 = self._ensure_im_pc(self.pc)
         word = self.im[pc0] & 0xFFFFFFFF
         op_byte, operand = unpack_word(word)
@@ -475,12 +483,10 @@ class Cpu:
             log.write(f"{self.ticks}\t{pc0}\t{word:08X}\t{mode}\n")
 
         self._dispatch_opcode(pc0, op_byte, operand, log)
-        self._add_ticks(op_byte)
-        if not self.halted:
-            self._try_deliver_irq_after_instruction(log)
+        self.stall_ticks = max(_TICKS.get(op_byte, 1) - 1, 0)
 
     def _step_superscalar(self, log: TextIO | None) -> None:
-        """До двух последовательных инструкций за один step при отсутствии конфликтов."""
+        """Выдать и исполнить до двух инструкций (без учёта фона/IRQ/stall)."""
         if self.interrupt_depth > 0:
             self._step_scalar(log)
             return
@@ -508,6 +514,12 @@ class Cpu:
         if not can_dual_issue(op0, op1):
             self._step_scalar(log)
             return
+        if _blocked_by_shadow_busy(op0, op1, self.shadow_busy_ticks):
+            if log is not None:
+                mode = "ISR" if self.interrupt_depth > 0 else "USR"
+                log.write(f"{self.ticks}\tPAR_BLOCK\tshadow_busy\t{mode}\n")
+            self._step_scalar(log)
+            return
 
         if log is not None:
             mode = "ISR" if self.interrupt_depth > 0 else "USR"
@@ -517,39 +529,43 @@ class Cpu:
 
         self._dispatch_opcode(pc0, op0, od0, log)
         if self.halted:
-            self._add_ticks(op0)
+            self.stall_ticks = max(_TICKS.get(op0, 1) - 1, 0)
             return
 
         self._dispatch_opcode(pc1, op1, od1, log)
         tick0 = _TICKS.get(op0, 1)
         tick1 = _TICKS.get(op1, 1)
-        self.ticks += tick0 if tick0 > tick1 else tick1
-
-        if not self.halted:
-            self._try_deliver_irq_after_instruction(log)
+        self.stall_ticks = max((tick0 if tick0 > tick1 else tick1) - 1, 0)
 
     def step(self, log: TextIO | None = None) -> None:
-        """одна «порция» исполнения: скаляр — одна инструкция; superscalar — до двух."""
+        """Один тик модели: background → irq → stall → issue/execute."""
         if self.halted:
             return
 
+        self.ticks += 1
         if self.superscalar:
             self._tick_shadow_background(log)
         self._apply_irq_schedule_for_current_ticks()
+        if self._try_deliver_irq_after_instruction(log):
+            return
+        if self.stall_ticks > 0:
+            self.stall_ticks -= 1
+            if log is not None:
+                mode = "ISR" if self.interrupt_depth > 0 else "USR"
+                log.write(f"{self.ticks}\tSTALL\t{self.stall_ticks}\t{mode}\n")
+            return
 
         if not self.superscalar:
             self._step_scalar(log)
         else:
             self._step_superscalar(log)
 
-    def _try_deliver_irq_after_instruction(self, log: TextIO | None = None) -> None:
-        """после инструкции: один pending IRQ → push return PC, jmp на вектор"""
-        if self.ticks == 0:
-            return
+    def _try_deliver_irq_after_instruction(self, log: TextIO | None = None) -> bool:
+        """доставка IRQ в начале тика (до issue)."""
         if not self.irq_enabled:
-            return
+            return False
         if self.interrupt_depth > 0:
-            return
+            return False
         for irq in range(NUM_IRQ_LINES):
             if not self.irq_pending[irq]:
                 continue
@@ -561,7 +577,11 @@ class Cpu:
             self.interrupt_depth += 1
             self._irq_delivered_byte = self.irq_line_value[irq] & 0xFF
             self.irq_pending[irq] = False
-            return
+            if log is not None:
+                mode = "ISR" if self.interrupt_depth > 0 else "USR"
+                log.write(f"{self.ticks}\tIRQ_TRAP\t{irq}\t{mode}\n")
+            return True
+        return False
 
 
 def _signed32(u: int) -> int:

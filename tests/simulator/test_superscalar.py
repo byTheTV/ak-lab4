@@ -65,7 +65,7 @@ def test_log_par_line_on_dual_issue() -> None:
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, superscalar=True)
     run_program(cpu, max_ticks=100, log=buf)
     lines = buf.getvalue().strip().splitlines()
-    assert lines[0].startswith("0\tPAR\t")
+    assert "\tPAR\t" in lines[0]
     assert "\tPAR\t" in lines[0]
 
 
@@ -105,11 +105,12 @@ def test_deferred_store_visible_only_after_flush_on_halt() -> None:
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, superscalar=True)
 
     cpu.step()  # push addr + push value
-    cpu.step()  # store deferred
+    while cpu.pc < 3:
+        cpu.step()  # stall/issue до момента после STORE
     assert cpu.dm[addr] == 0
     assert cpu.shadow_stores == [(addr, value)]
 
-    cpu.step()  # halt -> flush
+    run_program(cpu, max_ticks=200)  # halt -> flush
     assert cpu.halted
     assert cpu.dm[addr] == value
     assert cpu.shadow_stores == []
@@ -184,9 +185,12 @@ def test_irq_delivery_flushes_shadow_before_isr() -> None:
 
     cpu.step(log=buf)  # jmp 10
     cpu.step(log=buf)  # push pair
+    while cpu.pc < 13:
+        cpu.step(log=buf)  # stall/issue до STORE
+    assert cpu.shadow_stores == [(15, 55)]
     cpu.irq_pending[0] = True
     cpu.irq_line_value[0] = 65
-    cpu.step(log=buf)  # store + irq delivery
+    cpu.step(log=buf)  # irq delivery + flush shadow
 
     assert cpu.pc == 20
     assert cpu.interrupt_depth == 1

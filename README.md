@@ -210,11 +210,11 @@ opcode - старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/isa/
 Реализация (по паттерну `set/swap/flush` из методички для stack):
 
 1. При `Cpu.superscalar=True` за один вызов `step` читается окно двух слов подряд из IM (`PC` и `PC+1`), и для безопасных пар возможна двойная выдача.
-2. Для `STORE` включён deferred store: запись сначала попадает в `shadow_stores` (очередь отложенных commit-ов), а не сразу в DM.
+2. Для `STORE` включён deferred store: запись сначала попадает в `shadow_stores`, а не сразу в DM (в текущей модели одновременно держится не более одной отложенной записи).
 3. Для `LOAD` включён dead load elimination: повторный `LOAD` того же адреса может взять значение из `last_load_addr/last_load_value` без чтения DM.
-4. Когда буфер отложенных записей заполнен, выполняется parallel flush: обе shadow-записи коммитятся в память одним событием `PAR_FLUSH`.
+4. Когда перед `STORE` буфер уже занят, выполняется `PAR_FLUSH` (`reason=overflow`) и прежняя shadow-запись коммитится в DM, после чего в shadow кладётся новая.
 5. Перед входом в ISR и на `HALT` все отложенные store принудительно сбрасываются, чтобы архитектурное состояние DM было консистентным.
-6. Такты: при двойной выдаче `ticks += max(t0, t1)`; `PAR_FLUSH` добавляет отдельный flush-такт.
+6. Такты: один вызов `step` всегда добавляет 1 тик, а латентность инструкции/пары моделируется через `stall_ticks`; для пары это эквивалентно длительности `max(t0, t1)`. `PAR_FLUSH` добавляет отдельный flush-такт.
 7. Журнал: помимо строки `PAR`, добавлена строка `PAR_FLUSH` с причиной (`overflow`/`irq`/`halt`) и списком пар `addr:value`.
 
 По умолчанию `superscalar=False`, чтобы golden не менялись. Включение: конструктор `Cpu` или флаг `--superscalar` у симулятора.
@@ -273,11 +273,13 @@ opcode - старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/isa/
 - Двойная выдача:  
   `ticks<TAB>PAR<TAB>pc0<TAB>word0<TAB>pc1<TAB>word1<TAB>USR|ISR`
 - Сброс shadow store-ов:  
-  `ticks<TAB>PAR_FLUSH<TAB>reason<TAB>addr0:val0<TAB>addr1:val1<TAB>USR|ISR`
+  `ticks<TAB>PAR_FLUSH<TAB>reason<TAB>addr:val [<TAB>addr:val ...]<TAB>USR|ISR`
+- Фоновый commit shadow store:  
+  `ticks<TAB>BG_STORE<TAB>addr:val<TAB>USR|ISR`
 
 ### Trap (расписание IRQ)
 
-Файл JSON - массив объектов с полями `tick` (глобальный счётчик тактов модели), `irq` (0…7), `value` (байт на линию; допускается число или односимвольная строка). Разбор: [io_schedule.py](src/ak_lab4/io_schedule.py).
+Файл JSON - массив объектов с полями `tick` (глобальный счётчик тактов модели), `irq` (0…7), `value` (байт на линию; допускаются `int`/`float`/`bool` и строка, берётся первый символ). Разбор: [io_schedule.py](src/ak_lab4/io_schedule.py).
 
 Пример:
 
@@ -292,55 +294,17 @@ opcode - старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/isa/
 Аппаратные схемы оформлены отдельно от программной модели:
 
 - [hw/datapath.mmd](hw/datapath.mmd) - схема тракта данных;
-- [hw/control_unit.mmd](hw/control_unit.mmd) - схема hardwired ControlUnit.
+- [hw/control_unit.mmd](hw/control_unit.mmd) - схема hardwired ControlUnit;
+- [sceme/Datapath.png](sceme/Datapath.png) - финальный рендер схемы DataPath;
+- [sceme/control unit.png](sceme/control%20unit.png) - финальный рендер схемы ControlUnit.
 
-Схемы — это **аппаратная** декомпозиция (регистры/защёлки, мультиплексоры, ALU, IM/DM, Port I/O), а не структура файлов Python. Сигнальные линии от Control Unit показаны бандлом (см. рекомендации `lab4-task.md`).
+DataPath (PNG):
 
-#### DataPath: регистры, MUX-ы, сигналы (согласовано с `cpu.py`)
+![DataPath](sceme/Datapath.png)
 
-Ключевые узлы:
+ControlUnit (PNG):
 
-- `SP` (16 бит) — указатель стека (адрес следующей свободной ячейки в DM).
-- `DM` (65536 × 32, single-port) — стек и данные в памяти слов.
-- временные регистры `A/B/TMP` — аппаратная фиксация значений, считываемых со стека/из памяти;
-- `ALU` (`ADD SUB MUL DIV MOD EQ SLT`);
-- `sign_ext(imm24)` и `push_src` mux (`ALU` / `DM_dout` / `imm32` / `IN_data` / `ret_pc`).
-
-Такой datapath отражает фактическую семантику в коде: `push/pop` выполняются через `DM` и `SP`, без обязательного постоянного кэша `TOS/NOS` в состоянии модели.
-
-Сигнальный бандл от CU:
-`stack_pop/push, sp_delta, dm_re/we, addr_sel, alu_op, in_en, out_en, port_sel`.
-
-#### ControlUnit: выборка/декодирование, `PC_mux`, IRQ
-
-Ключевые узлы:
-
-- `PC` (16 бит) + `PC_mux` (`PC+1`, `operand`, `stack_val`, `irq_target`);
-- `IM` и разбор текущего слова на `opcode/operand`;
-- `decode_and_execute` (hardwired-логика в `Cpu._dispatch_opcode`);
-- `tick adder` (`_TICKS`) для пословного моделирования тактов.
-
-IRQ controller:
-
-- `pending[7..0]` — биты ожидающих запросов по линиям;
-- `irq_enabled` — общий маск-флаг (`EI`/`CLI`);
-- `int_depth` — текущая глубина вложенности обработчиков;
-- `priority encoder` — выбор активной линии (наименьший номер с pending);
-- `vec_idx = 1 + irq#` — адрес слова-вектора в `IM`;
-- `vector reader` — чтение `IM[vec_idx]` и извлечение `irq_target` (ожидается `JMP handler`);
-- `irq_ready = irq_enabled & (int_depth == 0) & |pending` — разрешение доставки IRQ.
-
-Внешний пин: `ext IRQ req` — приходит из `--schedule` (см. [io_schedule.py](src/ak_lab4/io_schedule.py)) или из устройства.
-
-Сигнальный бандл от декодера:
-к CU — `pc_sel/latch_pc`, `ei/cli`, `interrupt_depth +/-`, `irq_pending clear`;
-к DataPath — см. список сигналов выше.
-
-### Особенности моделирования
-
-- Цикл: `run_program` вызывает `step` до `HALT` или ошибки (`CpuFault`).
-- После каждой инструкции (или пары при superscalar) - попытка доставить одно отложенное IRQ, если разрешено и не внутри ISR.
-- Соответствие схеме: при проектировании hw регистры PC, SP, шины адреса/данных IM/DM и стек должны согласоваться с этой моделью.
+![ControlUnit](sceme/control%20unit.png)
 
 ---
 
@@ -374,21 +338,4 @@ python -m ak_lab4.translator golden/hello_user_name/source.tv -o code.bin --data
 python -m ak_lab4.simulator code.bin data.bin --input golden/hello_user_name/input.txt
 ```
 
----
 
-## Структура репозитория и инструменты
-
-| Путь | Назначение |
-|------|------------|
-| `src/ak_lab4/translator/` | лексер, парсер, AST, кодогенерация |
-| `src/ak_lab4/isa/` | опкоды, упаковка слова, порты |
-| `src/ak_lab4/cpu.py` | модель CPU, такты, superscalar |
-| `src/ak_lab4/simulator/` | CLI симулятора |
-| `src/ak_lab4/loader.py` | чтение/запись LE bin |
-| `hw/` | схемы `DataPath` и `ControlUnit` для пункта `hw` |
-| `golden/` | эталоны; см. [golden/README.md](golden/README.md) |
-| `.github/workflows/ci.yml` | CI |
-
-Локально: Python 3.12, `pip install -e ".[dev]"`, затем `ruff check`, `ruff format --check`, `mypy`, `pytest`.
-
-Папка `docs/` в [.gitignore](.gitignore) - локальные черновики не попадают в репозиторий; для проверяющего нормативное описание - этот README.md и lab4-task.md.
