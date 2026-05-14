@@ -5,8 +5,8 @@ from collections import deque
 import pytest
 
 from ak_lab4.cpu import Cpu, init_memory_from_segments, run_program
-from ak_lab4.translator import parse
 from ak_lab4.memory import STACK_BASE
+from ak_lab4.translator import parse
 from ak_lab4.translator.codegen import CodegenError, compile_program
 
 

@@ -289,14 +289,8 @@ opcode - старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/isa/
 ]
 ```
 
-### Схемы DataPath и ControlUnit (пункт `hw` варианта)
+### Схемы DataPath и ControlUnit
 
-Аппаратные схемы оформлены отдельно от программной модели:
-
-- [hw/datapath.mmd](hw/datapath.mmd) - схема тракта данных;
-- [hw/control_unit.mmd](hw/control_unit.mmd) - схема hardwired ControlUnit;
-- [sceme/Datapath.png](sceme/Datapath.png) - финальный рендер схемы DataPath;
-- [sceme/control unit.png](sceme/control%20unit.png) - финальный рендер схемы ControlUnit.
 
 DataPath (PNG):
 
@@ -310,32 +304,56 @@ ControlUnit (PNG):
 
 ## Тестирование
 
-### Юнит- и интеграционные тесты
+Проверки организованы в стиле «качество + функциональность + регрессии»:
 
-Запуск: `pytest` (см. [ci.yml](.github/workflows/ci.yml): ruff, mypy, pytest).
+- **Статика и типы (CI):** `ruff` (lint + format check), `mypy`, `pytest` (конфигурация в [ci.yml](.github/workflows/ci.yml)).
+- **Юнит/интеграция:** покрывают ISA, парсер/кодогенератор, CLI, CPU-модель, IRQ и superscalar-ветки.
+- **Golden:** проверка пользовательских сценариев «транслятор + симулятор» через эталонный `DATA_OUT` (см. [golden_support.py](tests/golden_support.py), [test_golden_core_cases.py](tests/test_golden_core_cases.py)).
 
-Отдельно: [tests/simulator/test_superscalar.py](tests/simulator/test_superscalar.py) - двойная выдача, `deferred store`, `DLE`, `PAR_FLUSH` (`overflow`/`irq`/`halt`) и сравнение `ticks` scalar vs superscalar.
+### Набор golden-кейсов
 
-### Golden-тесты
+| Каталог | Назначение |
+|---------|------------|
+| `hello` | базовый вывод строки |
+| `cat` | чтение из `DATA_IN` и немедленный вывод |
+| `hello_user_name` | сценарий с входными данными |
+| `sort` | алгоритмический пример со стеком и памятью |
+| `pstr_two` | проверка строкового представления `pstr` |
+| `prob1` | вариантная задача (длинный прогон по тактам) |
 
-Каталоги `golden/<case>/`: минимум `source.tv`, при необходимости `input.txt`, эталон вывода `expected_output.txt`. Прогон без subprocess: [golden_support.py](tests/golden_support.py), фаза A: [test_golden_phase_a.py](tests/test_golden_phase_a.py).
+### Покрытие кода
 
-| Каталог | Соответствие типовым алгоритмам ТЗ |
-|---------|-----------------------------------|
-| `hello` | hello world |
-| `cat` | копирование ввода |
-| `hello_user_name` | приветствие по имени |
-| `sort` | сортировка |
-| `pstr_two` | особенность pstr |
-| `prob1` | алгоритм по варианту (Euler #4; длинный прогон по тактам) |
+Актуальный отчёт покрытия публикуется в CI и сохраняется как `coverage-summary.md`.  
+Фрагмент отчёта:
 
-Журнал в golden не хранится целиком (объём); проверяется побайтовый вывод `DATA_OUT`.
+```text
+| Name                                  | Stmts | Miss | Branch | BrPart | Cover |
+|---------------------------------------|------:|-----:|-------:|-------:|------:|
+| src\ak_lab4\cpu.py                    |   189 |   62 |     76 |     16 |   67% |
+| src\ak_lab4\translator\codegen.py     |   236 |   18 |    116 |     19 |   89% |
+| src\ak_lab4\translator\lexer.py       |   102 |    3 |     38 |      3 |   96% |
+| src\ak_lab4\translator\parser.py      |    97 |   14 |     34 |      7 |   82% |
+| src\ak_lab4\translator\cli.py         |    44 |   14 |      6 |      1 |   70% |
+| TOTAL                                 |   765 |  114 |    286 |     49 |   83% |
+```
 
-### Пример цепочки «транслятор → симулятор»
+### Фрагмент журнала исполнения
 
-```bash
-python -m ak_lab4.translator golden/hello_user_name/source.tv -o code.bin --data-out data.bin
-python -m ak_lab4.simulator code.bin data.bin --input golden/hello_user_name/input.txt
+Журнал тактового исполнения пишется при запуске симулятора с `--log`; формат строк описан в разделе модели (`ticks`, `pc`/`PAR`, слово команды, контекст `USR|ISR`).
+
+Пример фрагмента (программа `hello`):
+
+```text
+1    0    01000048    USR
+2    STALL    0    USR
+3    1    02000000    USR
+4    STALL    0    USR
+5    2    31000001    USR
+6    STALL    1    USR
+7    STALL    0    USR
+8    3    03000000    USR
+...
+26   11   32000000    USR
 ```
 
 
