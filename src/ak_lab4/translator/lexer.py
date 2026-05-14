@@ -26,7 +26,7 @@ class Token:
     kind: TokKind
     text: str
     loc: SourceLoc
-    # у INT — значение, у остальных не используется
+    # у INT - значение, у остальных не используется
     int_value: int | None = None
 
 
@@ -37,7 +37,7 @@ class LexError(ValueError):
 
 
 def tokenize(source: str) -> list[Token]:
-    """Токены по тексту, пробелы и комментарии ; … до конца строки пропускаются"""
+    """Токены по тексту, пробелы и комментарии ; ... до конца строки пропускаются"""
     i = 0
     line = 1
     col = 1

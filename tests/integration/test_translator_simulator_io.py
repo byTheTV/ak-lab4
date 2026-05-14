@@ -1,4 +1,4 @@
-"""исходник → транслятор → code/data → симулятор с --input"""
+"""исходник -> транслятор -> code/data -> симулятор с --input"""
 
 from __future__ import annotations
 

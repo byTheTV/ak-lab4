@@ -20,7 +20,7 @@ from ak_lab4.memory import DM_SIZE_WORDS, IM_SIZE_WORDS, STACK_BASE
 
 
 class CpuFault(RuntimeError):
-    """Сбой исполнения (стек, PC, деление на 0, …)"""
+    """Сбой исполнения (стек, PC, деление на 0, ...)"""
 
 
 # Такты на команду
@@ -143,12 +143,12 @@ class Cpu:
     ticks: int = 0
     halted: bool = False
 
-    # True: за один step — до двух последовательных инструкций (при отсутствии конфликтов).
-    # По умолчанию выключено — golden и старые тесты без изменений.
+    # True: за один step - до двух последовательных инструкций (при отсутствии конфликтов).
+    # По умолчанию выключено - golden и старые тесты без изменений.
     superscalar: bool = False
     stall_ticks: int = 0
 
-    # DATA_IN: очередь байт слева; пусто → на стек −1 (EOF)
+    # DATA_IN: очередь байт слева; пусто -> на стек -1 (EOF)
     input_queue: deque[int] = field(default_factory=deque)
 
     # DATA_OUT: байты из младшего октета слова
@@ -538,7 +538,7 @@ class Cpu:
         self.stall_ticks = max((tick0 if tick0 > tick1 else tick1) - 1, 0)
 
     def step(self, log: TextIO | None = None) -> None:
-        """Один тик модели: background → irq → stall → issue/execute."""
+        """Один тик модели: background -> irq -> stall -> issue/execute."""
         if self.halted:
             return
 

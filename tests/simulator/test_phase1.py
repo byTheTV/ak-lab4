@@ -21,7 +21,7 @@ def test_run_add_then_halt() -> None:
 
 
 def test_load_store() -> None:
-    # DM[0x100] = 42 до исполнения — через data.bin?
+    # DM[0x100] = 42 до исполнения - через data.bin?
     data_words = [0] * 0x100 + [42]
     code_words = [
         pack_word(Opcode.PUSH_IMM, 0x100),

@@ -1,4 +1,4 @@
-"""строковые литералы → pstr в DM"""
+"""строковые литералы -> pstr в DM"""
 
 from __future__ import annotations
 

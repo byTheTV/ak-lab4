@@ -32,7 +32,7 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=None,
         metavar="PATH",
-        help="data.bin — только если есть строковые литералы",
+        help="data.bin - только если есть строковые литералы",
     )
     p.add_argument(
         "--listing",

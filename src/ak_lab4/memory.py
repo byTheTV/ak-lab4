@@ -6,5 +6,5 @@ from __future__ import annotations
 DM_SIZE_WORDS: int = 65536
 # IM: фиксированный размер памяти инструкций
 IM_SIZE_WORDS: int = 65536
-# дно стека — следующая свободная ячейка сверху
+# дно стека - следующая свободная ячейка сверху
 STACK_BASE: int = 0x1000

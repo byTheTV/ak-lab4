@@ -59,7 +59,7 @@ def unpack_word(word: int) -> tuple[int, int]:
 
 
 def sign_extend_operand_i(operand: int) -> int:
-    """24-бит знаковый операнд → int32"""
+    """24-бит знаковый операнд -> int32"""
     o = operand & OPERAND_MASK
     if o & 0x800000:
         return o - 0x1000000

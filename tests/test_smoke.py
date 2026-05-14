@@ -1,4 +1,4 @@
-"""минимальный smoke; golden — в test_golden_phase_a"""
+"""минимальный smoke; golden - в test_golden_phase_a"""
 
 from ak_lab4 import __version__
 
