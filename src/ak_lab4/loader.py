@@ -1,4 +1,4 @@
-"""Чтение/запись code.bin и data.bin, слова LE 32-bit"""
+"""Чтение/запись code.bin и data.bin; LE 32-bit"""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ class LoadError(ValueError):
 
 
 def load_words_le(path: Path) -> list[int]:
-    """LE-слова из файла; длина должна делиться на 4"""
     data = path.read_bytes()
     if len(data) % 4 != 0:
         msg = f"{path}: {len(data)} байт - размер не кратен 4"

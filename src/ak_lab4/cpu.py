@@ -23,36 +23,80 @@ class CpuFault(RuntimeError):
     """Сбой исполнения (стек, PC, деление на 0, ...)"""
 
 
-# Такты на команду
-_TICKS: dict[int, int] = {
-    int(Opcode.NOP): 1,
-    int(Opcode.PUSH_IMM): 2,
-    int(Opcode.DUP): 2,
-    int(Opcode.DROP): 2,
-    int(Opcode.LOAD): 4,
-    int(Opcode.STORE): 4,
-    int(Opcode.SWAP): 2,
-    int(Opcode.ADD): 3,
-    int(Opcode.SUB): 3,
-    int(Opcode.MUL): 5,
-    int(Opcode.DIV): 6,
-    int(Opcode.MOD): 6,
-    int(Opcode.EQ): 3,
-    int(Opcode.SLT): 3,
-    int(Opcode.JMP): 2,
-    int(Opcode.JZ): 4,
-    int(Opcode.CALL): 4,
-    int(Opcode.RET): 3,
-    int(Opcode.IN): 3,
-    int(Opcode.OUT): 3,
-    int(Opcode.HALT): 1,
-    int(Opcode.EI): 1,
-    int(Opcode.CLI): 1,
-}
+@dataclass(frozen=True)
+class OpTiming:
+    """
+    Упрощённый профиль потактовой модели инструкции.
+
+    issue: такт выдачи/декода (всегда 1 для валидной инструкции)
+    execute: дополнительные такты вычисления
+    memory: дополнительные такты памяти
+    commit: дополнительные такты фиксации результата/перехода
+    """
+
+    issue: int = 1
+    execute: int = 0
+    memory: int = 0
+    commit: int = 0
+
+    @property
+    def total_ticks(self) -> int:
+        return self.issue + self.execute + self.memory + self.commit
+
+
+def _timing_for_opcode(op: int) -> OpTiming:
+    """Вернуть профиль стадий для инструкции."""
+    if op in (
+        int(Opcode.NOP),
+        int(Opcode.HALT),
+        int(Opcode.EI),
+        int(Opcode.CLI),
+    ):
+        return OpTiming()
+    if op in (
+        int(Opcode.PUSH_IMM),
+        int(Opcode.DUP),
+        int(Opcode.DROP),
+        int(Opcode.SWAP),
+        int(Opcode.JMP),
+    ):
+        return OpTiming(execute=1)
+    if op in (
+        int(Opcode.ADD),
+        int(Opcode.SUB),
+        int(Opcode.EQ),
+        int(Opcode.SLT),
+        int(Opcode.RET),
+        int(Opcode.IN),
+        int(Opcode.OUT),
+    ):
+        return OpTiming(execute=2)
+    if op in (
+        int(Opcode.JZ),
+        int(Opcode.CALL),
+    ):
+        return OpTiming(execute=2, commit=1)
+    if op in (
+        int(Opcode.LOAD),
+        int(Opcode.STORE),
+    ):
+        return OpTiming(execute=1, memory=2)
+    if op == int(Opcode.MUL):
+        return OpTiming(execute=4)
+    if op in (
+        int(Opcode.DIV),
+        int(Opcode.MOD),
+    ):
+        return OpTiming(execute=5)
+    return OpTiming()
+
+
+def _latency_ticks(op: int) -> int:
+    """Полная латентность инструкции в тактах модели."""
+    return _timing_for_opcode(op).total_ticks
 
 _SHADOW_STORE_CAPACITY = 1
 _SHADOW_STORE_TICKS = 2
-_PARALLEL_FLUSH_TICKS = 1
 
 
 def _opcode_breaks_dual_issue(op: int) -> bool:
@@ -213,6 +257,7 @@ class Cpu:
         *,
         reason: str,
     ) -> bool:
+        """Принудительно закоммитить shadow store без изменения глобального ticks."""
         if not self.shadow_stores:
             return False
         if log is not None:
@@ -225,14 +270,18 @@ class Cpu:
             self._note_store_visibility(a, value)
         self.shadow_stores.clear()
         self.shadow_busy_ticks = 0
-        self.ticks += _PARALLEL_FLUSH_TICKS
         return True
 
     def _apply_irq_schedule_for_current_ticks(self) -> None:
-        """события расписания на текущий такт"""
+        """Применить события, назначенные на логический такт (step index)."""
+        logical_tick = self.ticks - 1
         while self._schedule_i < len(self.irq_schedule):
             ev = self.irq_schedule[self._schedule_i]
-            if ev.tick > self.ticks:
+            if ev.tick < logical_tick:
+                # Пропущенное событие: сдвигаем указатель, чтобы не зациклиться.
+                self._schedule_i += 1
+                continue
+            if ev.tick > logical_tick:
                 break
             irq = ev.irq
             if 0 <= irq < NUM_IRQ_LINES:
@@ -483,7 +532,7 @@ class Cpu:
             log.write(f"{self.ticks}\t{pc0}\t{word:08X}\t{mode}\n")
 
         self._dispatch_opcode(pc0, op_byte, operand, log)
-        self.stall_ticks = max(_TICKS.get(op_byte, 1) - 1, 0)
+        self.stall_ticks = max(_latency_ticks(op_byte) - 1, 0)
 
     def _step_superscalar(self, log: TextIO | None) -> None:
         """Выдать и исполнить до двух инструкций (без учёта фона/IRQ/stall)."""
@@ -529,12 +578,12 @@ class Cpu:
 
         self._dispatch_opcode(pc0, op0, od0, log)
         if self.halted:
-            self.stall_ticks = max(_TICKS.get(op0, 1) - 1, 0)
+            self.stall_ticks = max(_latency_ticks(op0) - 1, 0)
             return
 
         self._dispatch_opcode(pc1, op1, od1, log)
-        tick0 = _TICKS.get(op0, 1)
-        tick1 = _TICKS.get(op1, 1)
+        tick0 = _latency_ticks(op0)
+        tick1 = _latency_ticks(op1)
         self.stall_ticks = max((tick0 if tick0 > tick1 else tick1) - 1, 0)
 
     def step(self, log: TextIO | None = None) -> None:

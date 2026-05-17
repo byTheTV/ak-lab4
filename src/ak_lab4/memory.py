@@ -1,4 +1,4 @@
-"""Размеры IM/DM по спеке v0"""
+"""Размеры IM/DM"""
 
 from __future__ import annotations
 
