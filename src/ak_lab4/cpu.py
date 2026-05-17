@@ -606,7 +606,7 @@ class Cpu:
         if self.superscalar:
             self._tick_shadow_background(log)
         self._apply_irq_schedule_for_current_ticks()
-        if self._try_deliver_irq_after_instruction(log):
+        if self._try_deliver_irq_before_issue(log):
             return
         if self.stall_ticks > 0:
             self.stall_ticks -= 1
@@ -620,7 +620,7 @@ class Cpu:
         else:
             self._step_superscalar(log)
 
-    def _try_deliver_irq_after_instruction(self, log: TextIO | None = None) -> bool:
+    def _try_deliver_irq_before_issue(self, log: TextIO | None = None) -> bool:
         """доставка IRQ в начале тика (до issue)."""
         if not self.irq_enabled:
             return False
