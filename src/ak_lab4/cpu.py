@@ -121,11 +121,12 @@ def _opcode_breaks_dual_issue(op: int) -> bool:
 def can_dual_issue(op0: int, op1: int) -> bool:
     """
     Консервативная проверка независимости пары.
-    Разрешаем пары без конфликтов по стеку и без операций управления/портов.
+    Разрешаем пары без конфликтов по стеку и без операций управления/портов
 
     Можно было бы динамически анализировать зависимости (scoreboard) и решать на лету,
-    можно ли выдать две инструкции вместе.
-    Это дало бы больше параллелизма, но сильно усложнило бы код и было бы менее предсказуемым, поэтому решил сделать именно так.
+    можно ли выдать две инструкции вместе
+    Это дало бы больше параллелизма, но сильно усложнило бы код
+    Плюс поведение стало бы менее предсказуемым, поэтому решил сделать так
     """
     if _opcode_breaks_dual_issue(op0) or _opcode_breaks_dual_issue(op1):
         return False
@@ -221,7 +222,7 @@ class Cpu:
 
     # байт для первого IN в ISR после доставки IRQ
     _irq_delivered_byte: int | None = field(default=None, repr=False)
-    
+
     # AC_SHADOW для stack-варианта в superscalar-режиме
     shadow_stores: list[tuple[int, int]] = field(default_factory=list, repr=False)
     shadow_busy_ticks: int = field(default=0, repr=False)
