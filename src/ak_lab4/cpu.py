@@ -23,45 +23,31 @@ class CpuFault(RuntimeError):
     """Сбой исполнения (стек, PC, деление на 0, ...)"""
 
 
-@dataclass(frozen=True)
-class OpTiming:
-    """
-    Упрощённый профиль потактовой модели инструкции.
-
-    issue: такт выдачи/декода (всегда 1 для валидной инструкции)
-    execute: дополнительные такты вычисления
-    memory: дополнительные такты памяти
-    commit: дополнительные такты фиксации результата/перехода
-    """
-
-    issue: int = 1
-    execute: int = 0
-    memory: int = 0
-    commit: int = 0
-
-    @property
-    def total_ticks(self) -> int:
-        return self.issue + self.execute + self.memory + self.commit
+_ISSUE_TICKS = 1
+_EXECUTE_BASE_TICKS = 1
+_MEMORY_STAGE_TICKS = 2
 
 
-def _timing_for_opcode(op: int) -> OpTiming:
-    """Вернуть профиль стадий для инструкции."""
-    if op in (
+def _is_idle_opcode(op: int) -> bool:
+    """Инструкции без вычислительной/памятной стадии."""
+    return op in (
         int(Opcode.NOP),
         int(Opcode.HALT),
         int(Opcode.EI),
         int(Opcode.CLI),
-    ):
-        return OpTiming()
-    if op in (
-        int(Opcode.PUSH_IMM),
-        int(Opcode.DUP),
-        int(Opcode.DROP),
-        int(Opcode.SWAP),
-        int(Opcode.JMP),
-    ):
-        return OpTiming(execute=1)
-    if op in (
+    )
+
+
+def _uses_memory_stage(op: int) -> bool:
+    return op in (
+        int(Opcode.LOAD),
+        int(Opcode.STORE),
+    )
+
+
+def _needs_extra_execute_tick(op: int) -> bool:
+    """Операции, требующие дополнительного ALU/портового шага."""
+    return op in (
         int(Opcode.ADD),
         int(Opcode.SUB),
         int(Opcode.EQ),
@@ -69,31 +55,50 @@ def _timing_for_opcode(op: int) -> OpTiming:
         int(Opcode.RET),
         int(Opcode.IN),
         int(Opcode.OUT),
-    ):
-        return OpTiming(execute=2)
-    if op in (
         int(Opcode.JZ),
         int(Opcode.CALL),
-    ):
-        return OpTiming(execute=2, commit=1)
-    if op in (
-        int(Opcode.LOAD),
-        int(Opcode.STORE),
-    ):
-        return OpTiming(execute=1, memory=2)
+    )
+
+
+def _complex_execute_extra_ticks(op: int) -> int:
+    """Дополнительные тики сложного ALU поверх базового execute."""
     if op == int(Opcode.MUL):
-        return OpTiming(execute=4)
+        return 3
     if op in (
         int(Opcode.DIV),
         int(Opcode.MOD),
     ):
-        return OpTiming(execute=5)
-    return OpTiming()
+        return 4
+    return 0
+
+
+def _commit_stage_extra_ticks(op: int) -> int:
+    """Дополнительный commit для управления потоком."""
+    if op in (
+        int(Opcode.JZ),
+        int(Opcode.CALL),
+    ):
+        return 1
+    return 0
 
 
 def _latency_ticks(op: int) -> int:
-    """Полная латентность инструкции в тактах модели."""
-    return _timing_for_opcode(op).total_ticks
+    """
+    латентность через стадии конвейерной модели по сумме фаз:
+    issue + execute (+complex) + memory + commit.
+    """
+    ticks = _ISSUE_TICKS
+    if _is_idle_opcode(op):
+        return ticks
+
+    ticks += _EXECUTE_BASE_TICKS
+    if _needs_extra_execute_tick(op):
+        ticks += 1
+    ticks += _complex_execute_extra_ticks(op)
+    if _uses_memory_stage(op):
+        ticks += _MEMORY_STAGE_TICKS
+    ticks += _commit_stage_extra_ticks(op)
+    return ticks
 
 _SHADOW_STORE_CAPACITY = 1
 _SHADOW_STORE_TICKS = 2
@@ -117,6 +122,10 @@ def can_dual_issue(op0: int, op1: int) -> bool:
     """
     Консервативная проверка независимости пары.
     Разрешаем пары без конфликтов по стеку и без операций управления/портов.
+
+    Можно было бы динамически анализировать зависимости (scoreboard) и решать на лету,
+    можно ли выдать две инструкции вместе.
+    Это дало бы больше параллелизма, но сильно усложнило бы код и было бы менее предсказуемым, поэтому решил сделать именно так.
     """
     if _opcode_breaks_dual_issue(op0) or _opcode_breaks_dual_issue(op1):
         return False
@@ -188,7 +197,6 @@ class Cpu:
     halted: bool = False
 
     # True: за один step - до двух последовательных инструкций (при отсутствии конфликтов).
-    # По умолчанию выключено - golden и старые тесты без изменений.
     superscalar: bool = False
     stall_ticks: int = 0
 
@@ -213,6 +221,7 @@ class Cpu:
 
     # байт для первого IN в ISR после доставки IRQ
     _irq_delivered_byte: int | None = field(default=None, repr=False)
+    
     # AC_SHADOW для stack-варианта в superscalar-режиме
     shadow_stores: list[tuple[int, int]] = field(default_factory=list, repr=False)
     shadow_busy_ticks: int = field(default=0, repr=False)
