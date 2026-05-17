@@ -100,6 +100,7 @@ def _latency_ticks(op: int) -> int:
     ticks += _commit_stage_extra_ticks(op)
     return ticks
 
+
 _SHADOW_STORE_CAPACITY = 1
 _SHADOW_STORE_TICKS = 2
 
