@@ -23,36 +23,86 @@ class CpuFault(RuntimeError):
     """Сбой исполнения (стек, PC, деление на 0, ...)"""
 
 
-# Такты на команду
-_TICKS: dict[int, int] = {
-    int(Opcode.NOP): 1,
-    int(Opcode.PUSH_IMM): 2,
-    int(Opcode.DUP): 2,
-    int(Opcode.DROP): 2,
-    int(Opcode.LOAD): 4,
-    int(Opcode.STORE): 4,
-    int(Opcode.SWAP): 2,
-    int(Opcode.ADD): 3,
-    int(Opcode.SUB): 3,
-    int(Opcode.MUL): 5,
-    int(Opcode.DIV): 6,
-    int(Opcode.MOD): 6,
-    int(Opcode.EQ): 3,
-    int(Opcode.SLT): 3,
-    int(Opcode.JMP): 2,
-    int(Opcode.JZ): 4,
-    int(Opcode.CALL): 4,
-    int(Opcode.RET): 3,
-    int(Opcode.IN): 3,
-    int(Opcode.OUT): 3,
-    int(Opcode.HALT): 1,
-    int(Opcode.EI): 1,
-    int(Opcode.CLI): 1,
-}
+_ISSUE_TICKS = 1
+_EXECUTE_BASE_TICKS = 1
+_MEMORY_STAGE_TICKS = 2
+
+
+def _is_idle_opcode(op: int) -> bool:
+    """Инструкции без вычислительной/памятной стадии."""
+    return op in (
+        int(Opcode.NOP),
+        int(Opcode.HALT),
+        int(Opcode.EI),
+        int(Opcode.CLI),
+    )
+
+
+def _uses_memory_stage(op: int) -> bool:
+    return op in (
+        int(Opcode.LOAD),
+        int(Opcode.STORE),
+    )
+
+
+def _needs_extra_execute_tick(op: int) -> bool:
+    """Операции, требующие дополнительного ALU/портового шага."""
+    return op in (
+        int(Opcode.ADD),
+        int(Opcode.SUB),
+        int(Opcode.EQ),
+        int(Opcode.SLT),
+        int(Opcode.RET),
+        int(Opcode.IN),
+        int(Opcode.OUT),
+        int(Opcode.JZ),
+        int(Opcode.CALL),
+    )
+
+
+def _complex_execute_extra_ticks(op: int) -> int:
+    """Дополнительные тики сложного ALU поверх базового execute."""
+    if op == int(Opcode.MUL):
+        return 3
+    if op in (
+        int(Opcode.DIV),
+        int(Opcode.MOD),
+    ):
+        return 4
+    return 0
+
+
+def _commit_stage_extra_ticks(op: int) -> int:
+    """Дополнительный commit для управления потоком."""
+    if op in (
+        int(Opcode.JZ),
+        int(Opcode.CALL),
+    ):
+        return 1
+    return 0
+
+
+def _latency_ticks(op: int) -> int:
+    """
+    латентность через стадии конвейерной модели по сумме фаз:
+    issue + execute (+complex) + memory + commit.
+    """
+    ticks = _ISSUE_TICKS
+    if _is_idle_opcode(op):
+        return ticks
+
+    ticks += _EXECUTE_BASE_TICKS
+    if _needs_extra_execute_tick(op):
+        ticks += 1
+    ticks += _complex_execute_extra_ticks(op)
+    if _uses_memory_stage(op):
+        ticks += _MEMORY_STAGE_TICKS
+    ticks += _commit_stage_extra_ticks(op)
+    return ticks
+
 
 _SHADOW_STORE_CAPACITY = 1
 _SHADOW_STORE_TICKS = 2
-_PARALLEL_FLUSH_TICKS = 1
 
 
 def _opcode_breaks_dual_issue(op: int) -> bool:
@@ -72,7 +122,12 @@ def _opcode_breaks_dual_issue(op: int) -> bool:
 def can_dual_issue(op0: int, op1: int) -> bool:
     """
     Консервативная проверка независимости пары.
-    Разрешаем пары без конфликтов по стеку и без операций управления/портов.
+    Разрешаем пары без конфликтов по стеку и без операций управления/портов
+
+    Можно было бы динамически анализировать зависимости (scoreboard) и решать на лету,
+    можно ли выдать две инструкции вместе
+    Это дало бы больше параллелизма, но сильно усложнило бы код
+    Плюс поведение стало бы менее предсказуемым, поэтому решил сделать так
     """
     if _opcode_breaks_dual_issue(op0) or _opcode_breaks_dual_issue(op1):
         return False
@@ -144,7 +199,6 @@ class Cpu:
     halted: bool = False
 
     # True: за один step - до двух последовательных инструкций (при отсутствии конфликтов).
-    # По умолчанию выключено - golden и старые тесты без изменений.
     superscalar: bool = False
     stall_ticks: int = 0
 
@@ -169,6 +223,7 @@ class Cpu:
 
     # байт для первого IN в ISR после доставки IRQ
     _irq_delivered_byte: int | None = field(default=None, repr=False)
+
     # AC_SHADOW для stack-варианта в superscalar-режиме
     shadow_stores: list[tuple[int, int]] = field(default_factory=list, repr=False)
     shadow_busy_ticks: int = field(default=0, repr=False)
@@ -213,6 +268,7 @@ class Cpu:
         *,
         reason: str,
     ) -> bool:
+        """Принудительно закоммитить shadow store без изменения глобального ticks."""
         if not self.shadow_stores:
             return False
         if log is not None:
@@ -225,14 +281,18 @@ class Cpu:
             self._note_store_visibility(a, value)
         self.shadow_stores.clear()
         self.shadow_busy_ticks = 0
-        self.ticks += _PARALLEL_FLUSH_TICKS
         return True
 
     def _apply_irq_schedule_for_current_ticks(self) -> None:
-        """события расписания на текущий такт"""
+        """Применить события, назначенные на логический такт (step index)."""
+        logical_tick = self.ticks - 1
         while self._schedule_i < len(self.irq_schedule):
             ev = self.irq_schedule[self._schedule_i]
-            if ev.tick > self.ticks:
+            if ev.tick < logical_tick:
+                # Пропущенное событие: сдвигаем указатель, чтобы не зациклиться.
+                self._schedule_i += 1
+                continue
+            if ev.tick > logical_tick:
                 break
             irq = ev.irq
             if 0 <= irq < NUM_IRQ_LINES:
@@ -483,7 +543,7 @@ class Cpu:
             log.write(f"{self.ticks}\t{pc0}\t{word:08X}\t{mode}\n")
 
         self._dispatch_opcode(pc0, op_byte, operand, log)
-        self.stall_ticks = max(_TICKS.get(op_byte, 1) - 1, 0)
+        self.stall_ticks = max(_latency_ticks(op_byte) - 1, 0)
 
     def _step_superscalar(self, log: TextIO | None) -> None:
         """Выдать и исполнить до двух инструкций (без учёта фона/IRQ/stall)."""
@@ -529,12 +589,12 @@ class Cpu:
 
         self._dispatch_opcode(pc0, op0, od0, log)
         if self.halted:
-            self.stall_ticks = max(_TICKS.get(op0, 1) - 1, 0)
+            self.stall_ticks = max(_latency_ticks(op0) - 1, 0)
             return
 
         self._dispatch_opcode(pc1, op1, od1, log)
-        tick0 = _TICKS.get(op0, 1)
-        tick1 = _TICKS.get(op1, 1)
+        tick0 = _latency_ticks(op0)
+        tick1 = _latency_ticks(op1)
         self.stall_ticks = max((tick0 if tick0 > tick1 else tick1) - 1, 0)
 
     def step(self, log: TextIO | None = None) -> None:
@@ -546,7 +606,7 @@ class Cpu:
         if self.superscalar:
             self._tick_shadow_background(log)
         self._apply_irq_schedule_for_current_ticks()
-        if self._try_deliver_irq_after_instruction(log):
+        if self._try_deliver_irq_before_issue(log):
             return
         if self.stall_ticks > 0:
             self.stall_ticks -= 1
@@ -560,7 +620,7 @@ class Cpu:
         else:
             self._step_superscalar(log)
 
-    def _try_deliver_irq_after_instruction(self, log: TextIO | None = None) -> bool:
+    def _try_deliver_irq_before_issue(self, log: TextIO | None = None) -> bool:
         """доставка IRQ в начале тика (до issue)."""
         if not self.irq_enabled:
             return False

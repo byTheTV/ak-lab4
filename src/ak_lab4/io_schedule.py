@@ -11,7 +11,7 @@ from ak_lab4.isa import NUM_IRQ_LINES
 
 @dataclass(frozen=True)
 class IrqScheduleEvent:
-    """На такте tick значение на линии irq"""
+    """На логическом такте step (с нуля) значение на линии irq."""
 
     tick: int
     irq: int
