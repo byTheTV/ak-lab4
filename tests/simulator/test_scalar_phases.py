@@ -57,4 +57,3 @@ def test_scalar_mul_phases() -> None:
     run_program(cpu, max_ticks=100)
     assert cpu.halted
     assert cpu.dm[STACK_BASE] == 42
-

@@ -96,7 +96,7 @@ class _InFlightInsn:
 class DataPath:
     """Тракт данных: стек, DM и порты ввода-вывода."""
 
-    def __init__(self, cpu: "Cpu") -> None:
+    def __init__(self, cpu: Cpu) -> None:
         self._cpu = cpu
 
     def signal_push(self, value: int) -> None:
@@ -139,7 +139,7 @@ class DataPath:
 class ControlUnit:
     """Блок управления: тактирование, выборка, IRQ, запуск микрофаз."""
 
-    def __init__(self, cpu: "Cpu") -> None:
+    def __init__(self, cpu: Cpu) -> None:
         self._cpu = cpu
 
     def current_tick(self) -> int:
@@ -443,7 +443,9 @@ class Cpu:
             return
         log.write(f"{self.ticks}\tFETCH\t{insn.pc}\t{insn.word:08X}\t{self._exec_mode()}\n")
 
-    def _log_phase(self, insn: _InFlightInsn, phase: str, remaining: int, log: TextIO | None) -> None:
+    def _log_phase(
+        self, insn: _InFlightInsn, phase: str, remaining: int, log: TextIO | None
+    ) -> None:
         if log is None:
             return
         log.write(
@@ -742,10 +744,7 @@ class Cpu:
             self.pc = insn.scratch["target_pc"]
             return
         word = insn.word & 0xFFFFFFFF
-        msg = (
-            f"writeback-stage не поддерживает опкод 0x{op:02X} "
-            f"@PC={insn.pc} word={word:08X}"
-        )
+        msg = f"writeback-stage не поддерживает опкод 0x{op:02X} @PC={insn.pc} word={word:08X}"
         raise CpuFault(msg)
 
     def _complete_ret_writeback(self, insn: _InFlightInsn) -> None:
