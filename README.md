@@ -28,33 +28,80 @@ lisp | stack | harv | hw | tick | binary | trap | port | pstr | prob1 | supersca
 
 ### Синтаксис (форма Бэкуса-Наура)
 
-```ebnf
-<program>   ::= <form> { <form> } ;
+Грамматика в два слоя: **лексика/парсер** (что принимает `tokenize` + `parse_many`) и **ограничения компилятора** (порядок форм и спецформы в `compile_forms`).
 
-<form>      ::= <atom> | <list> ;
+```bnf
 
-<atom>      ::= <integer> | <string> | <symbol> ;
+program         ::= form+
 
-<list>      ::= "(" { <form> } ")" ;
+form            ::= s-expr
 
-<integer>   ::= [ "+" | "-" ] <digit> { <digit> } ;
+s-expr          ::= integer
+                  | string
+                  | symbol
+                  | "(" elements ")"
 
-<digit>     ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+elements        ::= ε
+                  | s-expr elements
 
-<string>    ::= "\"" { <string_char> } "\"" ;
+integer         ::= ["+" | "-"] digit+
+digit           ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
 
-<symbol>    ::= <symchar> { <symchar> } ;
+string          ::= '"' string-body '"'
+string-body     ::= ε
+                  | string-char string-body
+string-char     ::= <любой символ, кроме неэкранированной " и конца файла>
+                  | "\" "n"
+                  | "\" any-char
+
+symbol          ::= symbol-char+
+symbol-char     ::= <любой символ, кроме пробела, TAB, CR, LF, "(", ")", "\"", ";">
+
+defun-form      ::= "(" "defun" symbol "(" param-list ")" body+ ")"
+param-list      ::= ε | symbol param-list
+body            ::= s-expr
+
+interrupt-form  ::= "(" "interrupt" integer body+ ")"
+
+main-form       ::= s-expr
+
+setq-form       ::= "(" "setq" symbol s-expr ")"
+if-form         ::= "(" "if" s-expr s-expr s-expr ")"
+progn-form      ::= "(" "progn" s-expr+ ")"
+
+load-form       ::= "(" "load" s-expr ")"
+store-form      ::= "(" "store" s-expr s-expr ")"
+
+io-form         ::= "(" "in" ")"
+                  | "(" "out" s-expr ")"
+
+irq-ctl-form    ::= "(" "ei" ")"
+                  | "(" "di" ")"
+
+stack-form      ::= "(" "nop" ")"
+                  | "(" "drop" ")"
+
+cmp-form        ::= "(" cmp-op s-expr s-expr ")"
+cmp-op          ::= "eq" | "=" | "<" | ">"
+
+arith-form      ::= "(" arith-op s-expr s-expr arith-tail ")"
+arith-tail      ::= ε | s-expr arith-tail
+arith-op        ::= "+" | "-" | "*" | "/" | "mod"
+
+call-form       ::= "(" symbol arg-list ")"
+arg-list        ::= ε | s-expr arg-list
+
 ```
 
-Содержимое строки (`<string_char>`): любой символ кроме `"` и незакрытого конца файла; последовательность `\` + следующий символ - одно допустимое "закодированное" значение. На этапе парсинга поддерживается `\n` (превращается в перевод строки), для остальных `\x` в результирующую строку попадает символ `x` (см. `parse_string_literal` в [parser.py](src/ak_lab4/translator/parser.py)).
+Пояснения к реализации:
 
-Содержимое символа (`<symchar>`): символ исходного текста, не входящий в множество разделителей `пробел`, `\t`, `\r`, `\n`, `(`, `)`, `"`, `;` (см. [lexer.py](src/ak_lab4/translator/lexer.py)).
-
-Комментарий в исходнике: от `;` до конца строки - в грамматике выше не выделен отдельным правилом: на этапе лексического разбора последовательность `;` ... `\n` удаляется как пробельный/комментарийный хвост (см. `tokenize` в [lexer.py](src/ak_lab4/translator/lexer.py)).
-
-Замечание по ограничениям поверх грамматики: `()` синтаксически парсится как пустой список, но в текущем `codegen` такая форма не разрешена как выражение. Пустой файл лексически/синтаксически допустим (`parse_many` вернёт 0 форм), однако CLI транслятора считает это ошибкой (`файл пустой`).
-
-Список `(head arg ...)`: если `head` - символ из набора спецформ или имя `defun`-функции, действует соответствующее правило; иначе это вызов неизвестной функции (ошибка компиляции, если не объявлена).
+- Пустой список `()` парсится, но **не** допускается как выражение в `codegen`.
+- Пустой файл: `parse_many` → 0 форм; CLI транслятора — ошибка «файл пустой».
+- `(progn e1 … en)`: между формами компилятор вставляет `DROP`, кроме хвоста после последней.
+- `(if c t e)`: в IM присутствуют обе ветки; **выполняется** только выбранная (`JZ`).
+- Арифметика: минимум два аргумента; лишние сворачиваются слева направо той же операцией.
+- `(store addr val)`: на стек кладётся `addr`, затем `val` (вершина — значение); в машине `STORE` снимает сначала значение, затем адрес.
+- Вызов `(f arg …)` допустим только для имён, объявленных в предшествующих `defun`.
 
 ### Спецформы и встроенные конструкции
 
@@ -69,7 +116,7 @@ lisp | stack | harv | hw | tick | binary | trap | port | pstr | prob1 | supersca
 | `(ei)` / `(di)` | разрешить / запретить маскируемые IRQ |
 | `(interrupt n body)` | обработчик линии `n` (см. ниже); хвост программы после основного кода |
 | Арифметика и сравнения | `+`, `-`, `*`, `/`, `mod`, `eq` или `=`, `<`, `>` (по реализации в [codegen.py](src/ak_lab4/translator/codegen.py)) |
-| `(nop)`, `(drop)` | пустая операция / снять со стека |
+| `(nop)`, `(drop)` | пустая операция / снять вершину стека (опкоды `NOP`/`DROP`) |
 
 Строки: литерал `"..."` попадает в сегмент данных (pstr); при необходимости данных транслятор требует `--data-out`.
 
@@ -77,7 +124,7 @@ lisp | stack | harv | hw | tick | binary | trap | port | pstr | prob1 | supersca
 
 ### Семантика
 
-- Стратегия вычислений: eager - аргументы вычисляются до применения; в `if` вычисляется только выбранная ветка.
+- Стратегия вычислений: eager — аргументы вычисляются до применения операции; в `if` в код попадают обе ветки, но при исполнении выполняется только выбранная (`JZ`).
 - Области видимости: глобальные имена (`setq`) и параметры функций - фиксированные слоты в DM; вложенных `lambda` и замыканий нет.
 - Типизация: фактически машинное слово 32 бита без тегов; для `PUSH_IMM` операнд - 24 бита со знаком (расширение до 32 бит при загрузке).
 - Управление: `if`, вызовы `defun`, `CALL`/`RET` на уровне машины.
@@ -170,33 +217,35 @@ opcode - старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/isa/
 
 ### Набор команд и такты
 
-Такты на полный цикл инструкции в модели считаются в [cpu.py](src/ak_lab4/cpu.py) функцией `_latency_ticks`: сумма стадий `issue + execute (+complex) + memory + commit`.
+Модель процессора — строгая потактовая (`step()` = 1 тик). В **scalar** на инструкцию: такт `FETCH`, затем по одной именованной фазе на такт (`PHASE` в журнале). Исключение: `NOP`, `HALT`, `EI`, `CLI` — `FETCH` и `writeback` в **одном** такте (итого 1 тик). Число тактов: `scalar_ticks_for_opcode()` ([cpu.py](src/ak_lab4/cpu.py), экспорт из `ak_lab4`), для большинства опкодов `1 + len(phases)`. В **superscalar** допустимая пара может завершиться за один такт (`PAR` + burst всех фаз пары). IRQ — в начале каждого такта; незавершённая in-flight инструкция сохраняется в `suspended_user_pipeline` (одна инструкция) и восстанавливается после `RET`.
 
-| Hex | Мнемоника | Такты | Эффект на стеке (кратко) |
-|-----|-----------|-------|---------------------------|
-| 00 | NOP | 1 | без изменений |
-| 01 | PUSH_IMM | 2 | push imm24 |
-| 02 | DUP | 2 | dup TOS |
-| 03 | DROP | 2 | pop |
-| 04 | LOAD | 4 | pop addr -> push DM[addr] |
-| 05 | STORE | 4 | pop val, pop addr -> DM[addr]=val |
-| 06 | SWAP | 2 | поменять два верхних |
-| 10 | ADD | 3 | pop x, pop y -> push y+x |
-| 11 | SUB | 3 | pop x, pop y -> push y-x |
-| 12 | MUL | 5 | знаковое умножение |
-| 13 | DIV | 6 | целочисленное деление |
-| 14 | MOD | 6 | остаток |
-| 15 | EQ | 3 | равенство -> 0/1 |
-| 16 | SLT | 3 | pop b, pop a -> push 1 если a<b (знаково) |
-| 20 | JMP | 2 | PC <- адрес |
-| 21 | JZ | 4 | pop c; ветвление по нулю |
-| 22 | CALL | 4 | push return; PC <- target |
-| 23 | RET | 3 | pop -> PC |
-| 30 | IN | 3 | push байт из порта |
-| 31 | OUT | 3 | pop -> порт |
-| 32 | HALT | 1 | останов |
-| 33 | EI | 1 | разрешить IRQ |
-| 34 | CLI | 1 | запретить IRQ |
+| Hex | Мнемоника | Тактов (scalar) | Фазы после FETCH | Эффект на стеке (кратко) |
+|-----|-----------|-----------------|------------------|---------------------------|
+| 00 | NOP | 1 | writeback* | без изменений |
+| 01 | PUSH_IMM | 2 | writeback | push imm24 |
+| 02 | DUP | 2 | writeback | dup TOS |
+| 03 | DROP | 2 | writeback | pop |
+| 04 | LOAD | 4 | execute, memory, writeback | pop addr -> push DM[addr] |
+| 05 | STORE | 4 | execute, memory, writeback | pop val, pop addr -> DM[addr]=val |
+| 06 | SWAP | 2 | writeback | поменять два верхних |
+| 10 | ADD | 3 | execute, writeback | pop x, pop y -> push y+x |
+| 11 | SUB | 3 | execute, writeback | pop x, pop y -> push y-x |
+| 12 | MUL | 4 | execute, mul, writeback | знаковое умножение |
+| 13 | DIV | 4 | execute, div, writeback | целочисленное деление |
+| 14 | MOD | 4 | execute, div, writeback | остаток |
+| 15 | EQ | 3 | execute, writeback | равенство -> 0/1 |
+| 16 | SLT | 3 | execute, writeback | pop b, pop a -> push 1 если a<b (знаково) |
+| 20 | JMP | 2 | writeback | PC <- адрес |
+| 21 | JZ | 4 | execute, branch, writeback | pop c; ветвление по нулю |
+| 22 | CALL | 3 | execute, writeback | push return; PC <- target |
+| 23 | RET | 3 | execute, writeback | pop -> PC |
+| 30 | IN | 3 | execute, writeback | push байт из порта |
+| 31 | OUT | 3 | execute, writeback | pop -> порт |
+| 32 | HALT | 1 | writeback* | останов |
+| 33 | EI | 1 | writeback* | разрешить IRQ |
+| 34 | CLI | 1 | writeback* | запретить IRQ |
+
+\* `FETCH` и `writeback` в одном такте.
 
 ### Классификация
 
@@ -213,7 +262,7 @@ opcode - старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/isa/
 3. Для `LOAD` включён dead load elimination: повторный `LOAD` того же адреса может взять значение из `last_load_addr/last_load_value` без чтения DM.
 4. Когда перед `STORE` буфер уже занят, выполняется `PAR_FLUSH` (`reason=overflow`) и прежняя shadow-запись коммитится в DM, после чего в shadow кладётся новая.
 5. Перед входом в ISR и на `HALT` все отложенные store принудительно сбрасываются, чтобы архитектурное состояние DM было консистентным.
-6. Такты: один вызов `step` всегда добавляет 1 тик, а латентность инструкции/пары моделируется через `stall_ticks`; для пары это эквивалентно длительности `max(t0, t1)`. `PAR_FLUSH` не добавляет отдельный тик и выполняется внутри текущего шага.
+6. Такты: один вызов `step` всегда добавляет 1 тик. В scalar режиме длинные инструкции занимают pipeline на несколько тактов (FETCH + фазы). При двойной выдаче простая пара завершается в одном такте (`PAR` + burst фаз); иначе — как в scalar. `PAR_FLUSH` не добавляет отдельный тик и выполняется внутри текущего шага.
 7. Журнал: помимо строки `PAR`, добавлена строка `PAR_FLUSH` с причиной (`overflow`/`irq`/`halt`) и списком пар `addr:value`.
 
 По умолчанию `superscalar=False`, чтобы golden не менялись. Включение: конструктор `Cpu` или флаг `--superscalar` у симулятора.
@@ -241,7 +290,7 @@ opcode - старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/isa/
 
 1. Лексика + разбор: `tokenize` -> `parse_many` - последовательность S-выражений ([lexer.py](src/ak_lab4/translator/lexer.py), [parser.py](src/ak_lab4/translator/parser.py)).
 2. Семантика и кодогенерация: `compile_forms` - обход AST, раскладка `defun`, глобальных `setq`, строк, векторов прерываний; эмиссия слов IM/DM ([codegen.py](src/ak_lab4/translator/codegen.py)).
-3. Ограничения: сначала все `(defun ...)`, затем основной код; при необходимости в конце - блоки `(interrupt n ...)` по правилам компилятора.
+3. Ограничения: все `(defun ...)` подряд в начале файла; затем основной код (одна или несколько форм, при нескольких — как `progn`); опционально хвост из `(interrupt n ...)` только в конце (см. BNF).
 
 ---
 
@@ -267,8 +316,10 @@ opcode - старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/isa/
 
 Колонки разделены табуляцией.
 
-- Обычная инструкция:  
-  `ticks<TAB>pc<TAB>word<TAB>USR|ISR`
+- Выборка (scalar pipeline):  
+  `ticks<TAB>FETCH<TAB>pc<TAB>word<TAB>USR|ISR`
+- Фаза исполнения:  
+  `ticks<TAB>PHASE<TAB>phase_idx<TAB>phase_name<TAB>remaining<TAB>USR|ISR`
 - Двойная выдача:  
   `ticks<TAB>PAR<TAB>pc0<TAB>word0<TAB>pc1<TAB>word1<TAB>USR|ISR`
 - Сброс shadow store-ов:  
@@ -294,6 +345,7 @@ opcode - старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/isa/
 
 ### Схемы DataPath и ControlUnit
 
+Процессор разделён на два компонента (реализация — классы `DataPath` и `ControlUnit` в [cpu.py](src/ak_lab4/cpu.py); регистры `PC`/`SP`, `IM`/`DM`, pipeline — поля `Cpu`).
 
 DataPath (PNG):
 
@@ -302,6 +354,8 @@ DataPath (PNG):
 ControlUnit (PNG):
 
 ![ControlUnit](sceme/control%20unit.png)
+
+Подробное описание блоков, стрелок и соответствия коду: [sceme/README-ControlUnit.md](sceme/README-ControlUnit.md).
 
 ---
 
@@ -329,19 +383,7 @@ ControlUnit (PNG):
 
 ### Покрытие кода
 
-Актуальный отчет покрытия публикуется в CI и сохраняется как `coverage-summary.md`.  
-Фрагмент отчёта:
-
-```text
-| Name                                  | Stmts | Miss | Branch | BrPart | Cover |
-|---------------------------------------|------:|-----:|-------:|-------:|------:|
-| src\ak_lab4\cpu.py                    |   189 |   62 |     76 |     16 |   67% |
-| src\ak_lab4\translator\codegen.py     |   236 |   18 |    116 |     19 |   89% |
-| src\ak_lab4\translator\lexer.py       |   102 |    3 |     38 |      3 |   96% |
-| src\ak_lab4\translator\parser.py      |    97 |   14 |     34 |      7 |   82% |
-| src\ak_lab4\translator\cli.py         |    44 |   14 |      6 |      1 |   70% |
-| TOTAL                                 |   765 |  114 |    286 |     49 |   83% |
-```
+Актуальный отчёт публикуется в CI (артефакт `coverage-summary.md` после job coverage). Локально: `pytest --cov=ak_lab4 --cov-report=term-missing`.
 
 #### Пример использования
 
@@ -352,36 +394,17 @@ ControlUnit (PNG):
 3. Сверка побайтового DATA_OUT с эталоном golden-кейса.
 
 Если указан `--log`, симулятор пишет потактовый журнал.
-Один вызов `step` = один тик, поэтому номер в первой колонке растёт на 1 на каждом шаге.
-Длительность инструкции отражается через строки `STALL` между выдачами.
+Один вызов `step` = один тик, номер в первой колонке растёт на 1 на каждом шаге.
+Строк `STALL` в модели **нет**: пока инструкция не закончена, такты тратятся на реальные фазы (`PHASE` с именем `execute`, `memory`, `writeback`, …), а не на пустые ожидания.
+Сначала — `FETCH` (выборка), затем по одной фазе за такт, пока in-flight инструкция (`pipeline`) не завершена; только после этого возможна следующая выборка.
+Проверка и доставка IRQ — в начале **каждого** такта; прерывание может сохранить in-flight инструкцию в `suspended_user_pipeline` и восстановить её после `RET`.
 
-Пример фрагмента журнала (программа `hello`):
+Пример фрагмента журнала (`PUSH_IMM` + `OUT`, scalar):
 
 ```text
-1    0    01000048    USR
-2    STALL    0    USR
-3    1    02000000    USR
-4    STALL    0    USR
-5    2    31000001    USR
-6    STALL    1    USR
-7    STALL    0    USR
-8    3    03000000    USR
-9    STALL    0    USR
-10   4    01000069    USR
-11   STALL    0    USR
-12   5    02000000    USR
-13   STALL    0    USR
-14   6    31000001    USR
-15   STALL    1    USR
-16   STALL    0    USR
-17   7    03000000    USR
-18   STALL    0    USR
-19   8    0100000A    USR
-20   STALL    0    USR
-21   9    02000000    USR
-22   STALL    0    USR
-23   10   31000001    USR
-24   STALL    1    USR
-25   STALL    0    USR
-26   11   32000000    USR
+1    FETCH    0    01000048    USR
+2    PHASE    0    writeback    0    USR
+3    FETCH    1    31000001    USR
+4    PHASE    0    execute    1    USR
+5    PHASE    1    writeback    0    USR
 ```
