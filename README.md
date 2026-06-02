@@ -28,8 +28,6 @@ lisp | stack | harv | hw | tick | binary | trap | port | pstr | prob1 | supersca
 
 ### Синтаксис (форма Бэкуса-Наура)
 
-Грамматика в два слоя: **лексика/парсер** (что принимает `tokenize` + `parse_many`) и **ограничения компилятора** (порядок форм и спецформы в `compile_forms`).
-
 ```ebnf
 
 program         ::= form+
