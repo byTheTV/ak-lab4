@@ -1,6 +1,5 @@
 .venv/
 
-# ОС и редакторы — не коммитить (см. ТЗ: без лишних файлов в репозитории)
 .DS_Store
 Thumbs.db
 ehthumbs.db
@@ -33,3 +32,7 @@ htmlcov/
 .vscode/
 docs/
 lab4_task.md
+.log
+.bin
+
+golden/pstr_hello_string/

@@ -34,7 +34,7 @@ def test_irq_schedule_delivers_to_handler_via_in() -> None:
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
     run_program(cpu, max_ticks=50_000)
     assert cpu.halted
-    assert cpu.irq_latches[0] == 66
+    assert cpu.irq_line_value[0] == 66
 
 
 def test_irq_tick_zero_delivers_before_first_issue() -> None:
@@ -65,7 +65,8 @@ def test_irq_tick_one_not_delivered_on_first_step() -> None:
     cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
 
     cpu.step()
-    assert cpu.pc == 10
+    # JMP имеет отдельный writeback-тик: после первого шага он только in-flight.
+    assert cpu.pc == 0
     assert cpu.interrupt_depth == 0
 
     cpu.step()
