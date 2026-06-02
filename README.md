@@ -355,6 +355,8 @@ ControlUnit (PNG):
 
 ![ControlUnit](sceme/control%20unit.png)
 
+Подробное описание блоков, стрелок и соответствия коду: [sceme/README-ControlUnit.md](sceme/README-ControlUnit.md).
+
 ---
 
 ## Тестирование
