@@ -28,9 +28,7 @@ lisp | stack | harv | hw | tick | binary | trap | port | pstr | prob1 | supersca
 
 ### Синтаксис (форма Бэкуса-Наура)
 
-Грамматика в два слоя: **лексика/парсер** (что принимает `tokenize` + `parse_many`) и **ограничения компилятора** (порядок форм и спецформы в `compile_forms`).
-
-```bnf
+```ebnf
 
 program         ::= form+
 
@@ -243,22 +241,22 @@ opcode — старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/is
 | 01 | PUSH_IMM | 2 | writeback | push imm24 |
 | 02 | DUP | 2 | writeback | dup TOS |
 | 03 | DROP | 2 | writeback | pop |
-| 04 | LOAD | 4 | execute, memory, writeback | pop addr → push DM[addr] |
-| 05 | STORE | 4 | execute, memory, writeback | pop val, pop addr → DM[addr]=val |
+| 04 | LOAD | 4 | execute, memory, writeback | pop addr -> push DM[addr] |
+| 05 | STORE | 4 | execute, memory, writeback | pop val, pop addr -> DM[addr]=val |
 | 06 | SWAP | 2 | writeback | поменять два верхних |
-| 10 | ADD | 3 | execute, writeback | pop x, pop y → push y+x |
-| 11 | SUB | 3 | execute, writeback | pop x, pop y → push y-x |
+| 10 | ADD | 3 | execute, writeback | pop x, pop y -> push y+x |
+| 11 | SUB | 3 | execute, writeback | pop x, pop y -> push y-x |
 | 12 | MUL | 4 | execute, mul, writeback | знаковое умножение |
 | 13 | DIV | 4 | execute, div, writeback | целочисленное деление |
 | 14 | MOD | 4 | execute, div, writeback | остаток |
-| 15 | EQ | 3 | execute, writeback | равенство → 0/1 |
-| 16 | SLT | 3 | execute, writeback | pop b, pop a → push 1 если a<b (знаково) |
-| 20 | JMP | 2 | writeback | PC ← адрес |
+| 15 | EQ | 3 | execute, writeback | равенство -> 0/1 |
+| 16 | SLT | 3 | execute, writeback | pop b, pop a -> push 1 если a<b (знаково) |
+| 20 | JMP | 2 | writeback | PC <- адрес |
 | 21 | JZ | 4 | execute, branch, writeback | pop c; ветвление по нулю |
-| 22 | CALL | 3 | execute, writeback | push return; PC ← target |
-| 23 | RET | 3 | execute, writeback | pop → PC |
+| 22 | CALL | 3 | execute, writeback | push return; PC <- target |
+| 23 | RET | 3 | execute, writeback | pop -> PC |
 | 30 | IN | 3 | execute, writeback | push байт из порта |
-| 31 | OUT | 3 | execute, writeback | pop → порт |
+| 31 | OUT | 3 | execute, writeback | pop -> порт |
 | 32 | HALT | 1 | writeback* | останов |
 | 33 | EI | 1 | writeback* | разрешить IRQ |
 | 34 | CLI | 1 | writeback* | запретить IRQ |
@@ -415,6 +413,7 @@ ControlUnit (PNG):
 ### Пример использования
 
 Пример фрагмента журнала (программа cat):
+
 
 ```text
 1	FETCH	0	20000016	USR
