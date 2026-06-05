@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from io import StringIO
 
-from ak_lab4.machine import Machine, init_memory_from_segments, run_program
 from ak_lab4.isa import Opcode, pack_word
+from ak_lab4.machine import Machine, init_memory_from_segments, run_program
 from ak_lab4.memory import STACK_BASE
 
 

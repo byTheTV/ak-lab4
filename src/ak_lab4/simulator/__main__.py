@@ -7,9 +7,9 @@ import json
 import sys
 from pathlib import Path
 
-from ak_lab4.machine import Machine, MachineFault, init_memory_from_segments, run_program
 from ak_lab4.io_schedule import IrqScheduleEvent, load_irq_schedule_json
 from ak_lab4.loader import load_words_le
+from ak_lab4.machine import Machine, MachineFault, init_memory_from_segments, run_program
 from ak_lab4.memory import STACK_BASE
 
 

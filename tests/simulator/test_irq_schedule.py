@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 
-from ak_lab4.machine import Machine, init_memory_from_segments, run_program
 from ak_lab4.io_schedule import IrqScheduleEvent, load_irq_schedule_json
 from ak_lab4.isa import Opcode, pack_word
+from ak_lab4.machine import Machine, init_memory_from_segments, run_program
 from ak_lab4.memory import STACK_BASE
 from ak_lab4.translator import compile_forms, parse_many
 

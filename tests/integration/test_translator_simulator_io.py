@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections import deque
 from pathlib import Path
 
-from ak_lab4.machine import Machine, init_memory_from_segments, run_program
 from ak_lab4.loader import load_words_le
+from ak_lab4.machine import Machine, init_memory_from_segments, run_program
 from ak_lab4.memory import STACK_BASE
 from ak_lab4.simulator.__main__ import main as simulator_main
 from ak_lab4.translator import compile_program, parse

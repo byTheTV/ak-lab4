@@ -200,7 +200,9 @@ class DataPath:
     ) -> None:
         self.dm: list[int] = dm if dm is not None else [0] * DM_SIZE_WORDS
         self.sp = sp
-        self.input_queue: deque[int] = input_queue if input_queue is not None else deque()  # Port IN
+        self.input_queue: deque[int] = (
+            input_queue if input_queue is not None else deque()
+        )  # Port IN
         self.out_bytes: list[int] = out_bytes if out_bytes is not None else []  # Port OUT
         self.shadow_stores: list[tuple[int, int]] = []  # deferred store: (addr, val)
         self.shadow_busy_ticks = 0  # тики до BG commit в DM
@@ -600,11 +602,7 @@ class ControlUnit:
         if phase == "memory":
             if op == int(Opcode.LOAD):
                 a = insn.scratch["addr"]
-                if (
-                    self.superscalar
-                    and dp.last_load_addr == a
-                    and dp.last_load_value is not None
-                ):
+                if self.superscalar and dp.last_load_addr == a and dp.last_load_value is not None:
                     val = dp.last_load_value & 0xFFFFFFFF
                 else:
                     val = dp.signal_read_mem(a)
@@ -913,4 +911,3 @@ def run_program(
             msg = f"лимит тактов ({max_ticks})"
             raise MachineFault(msg)
         machine.step(log=log)
-
