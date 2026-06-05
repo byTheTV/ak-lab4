@@ -28,19 +28,21 @@ lisp | stack | harv | hw | tick | binary | trap | port | pstr | prob1 | supersca
 
 ### Синтаксис (форма Бэкуса-Наура)
 
+Синтаксис основан на S-выражениях. Транслятор строит AST (`parse` / `parse_many` в [parser.py](src/ak_lab4/translator/parser.py)), затем семантический анализ и кодогенерация проверяют форму списков (`compile_forms` в [codegen.py](src/ak_lab4/translator/codegen.py)).
+
 ```ebnf
+; --- Лексика (lexer: tokenize) ---
 
-program         ::= form+
+source          ::= { token | comment | whitespace } EOF
 
-form            ::= s-expr
+comment         ::= ";" { <любой символ кроме LF> } LF
 
-s-expr          ::= integer
+whitespace      ::= " " | TAB | CR | LF
+
+token           ::= "(" | ")"
+                  | integer
                   | string
                   | symbol
-                  | "(" elements ")"
-
-elements        ::= ε
-                  | s-expr elements
 
 integer         ::= ["+" | "-"] digit+
 digit           ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
@@ -48,30 +50,79 @@ digit           ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
 string          ::= '"' string-body '"'
 string-body     ::= ε
                   | string-char string-body
-string-char     ::= <любой символ, кроме неэкранированной " и конца файла>
+string-char     ::= <любой символ, кроме неэкранированной " и EOF>
                   | "\" "n"
                   | "\" any-char
 
 symbol          ::= symbol-char+
 symbol-char     ::= <любой символ, кроме пробела, TAB, CR, LF, "(", ")", "\"", ";">
 
+; --- Синтаксис S-выражений (parser: parse_expr) ---
+
+s-expr          ::= integer
+                  | string
+                  | symbol
+                  | list-expr
+
+list-expr       ::= "(" elements ")"
+elements        ::= ε
+                  | s-expr elements
+
+; --- Структура программы (codegen: compile_forms) ---
+
+program         ::= defun-block? main-block interrupt-block?
+
+defun-block     ::= defun-form+
+main-block      ::= top-level-form+
+interrupt-block ::= interrupt-form+
+
+top-level-form  ::= s-expr
+
+; --- Семантика непустых списков (codegen: _emit) ---
+; Любой непустой list-expr имеет вид (head arg-list), head ::= symbol.
+; Пустой список () синтаксически допустим, но не является выражением.
+
+list-form       ::= "(" head arg-list ")"
+head            ::= symbol
+arg-list        ::= ε
+                  | s-expr arg-list
+
+expression      ::= integer
+                  | string
+                  | symbol
+                  | special-form
+                  | user-call
+
+special-form    ::= setq-form
+                  | if-form
+                  | progn-form
+                  | load-form
+                  | store-form
+                  | io-form
+                  | irq-ctl-form
+                  | stack-form
+                  | cmp-form
+                  | arith-form
+
+user-call       ::= "(" user-func-name arg-list ")"
+user-func-name  ::= symbol    ; имя должно быть объявлено в defun-block
+
 defun-form      ::= "(" "defun" symbol "(" param-list ")" body+ ")"
-param-list      ::= ε | symbol param-list
-body            ::= s-expr
+param-list      ::= ε
+                  | symbol param-list
+body            ::= expression
 
 interrupt-form  ::= "(" "interrupt" integer body+ ")"
 
-main-form       ::= s-expr
+setq-form       ::= "(" "setq" symbol expression ")"
+if-form         ::= "(" "if" expression expression expression ")"
+progn-form      ::= "(" "progn" expression+ ")"
 
-setq-form       ::= "(" "setq" symbol s-expr ")"
-if-form         ::= "(" "if" s-expr s-expr s-expr ")"
-progn-form      ::= "(" "progn" s-expr+ ")"
-
-load-form       ::= "(" "load" s-expr ")"
-store-form      ::= "(" "store" s-expr s-expr ")"
+load-form       ::= "(" "load" expression ")"
+store-form      ::= "(" "store" expression expression ")"
 
 io-form         ::= "(" "in" ")"
-                  | "(" "out" s-expr ")"
+                  | "(" "out" expression ")"
 
 irq-ctl-form    ::= "(" "ei" ")"
                   | "(" "di" ")"
@@ -79,35 +130,32 @@ irq-ctl-form    ::= "(" "ei" ")"
 stack-form      ::= "(" "nop" ")"
                   | "(" "drop" ")"
 
-cmp-form        ::= "(" cmp-op s-expr s-expr ")"
+cmp-form        ::= "(" cmp-op expression expression ")"
 cmp-op          ::= "eq" | "=" | "<" | ">"
 
-arith-form      ::= "(" arith-op s-expr s-expr arith-tail ")"
-arith-tail      ::= ε | s-expr arith-tail
+arith-form      ::= "(" arith-op expression expression arith-tail ")"
+arith-tail      ::= ε
+                  | expression arith-tail
 arith-op        ::= "+" | "-" | "*" | "/" | "mod"
-
-call-form       ::= "(" symbol arg-list ")"
-arg-list        ::= ε | s-expr arg-list
 
 ```
 
-Содержимое строки (`string-char`): любой символ кроме `"` и незакрытого конца файла; `\n` превращается в перевод строки, для остальных `\x` в строку попадает символ `x` (см. `parse_string_literal` в [parser.py](src/ak_lab4/translator/parser.py)).
+**Лексика.** `string-char`: `\n` → перевод строки; иначе `\x` → символ `x` ([parser.py](src/ak_lab4/translator/parser.py), `_parse_string_literal`). `symbol-char`: разделители — пробел, `\t`, `\r`, `\n`, `(`, `)`, `"`, `;` ([lexer.py](src/ak_lab4/translator/lexer.py)). Комментарий `; …` до конца строки отбрасывается в `tokenize`.
 
-Содержимое символа (`symbol-char`): символ исходного текста, не входящий в множество разделителей — пробел, `\t`, `\r`, `\n`, `(`, `)`, `"`, `;` (см. [lexer.py](src/ak_lab4/translator/lexer.py)).
+**Два этапа.** Парсер знает только `s-expr` / `list-expr` и **не** различает `setq` и вызов функции. Правила `special-form`, `user-call`, `program` действуют на этапе кодогенерации: неверная арность или неизвестный `head` — `CodegenError`.
 
-Комментарий: от `;` до конца строки удаляется на этапе лексического разбора (см. `tokenize` в [lexer.py](src/ak_lab4/translator/lexer.py)).
+**Структура файла.** Ограничения поверх `program` (проверяет `compile_forms`): файл не пустой; при `defun-block` нужен непустой `main-block`; `interrupt-block` — только суффикс файла, перед ним обязателен основной код. Допустимы варианты: только `main-block`; `main-block` + `interrupt-block`; `defun-block` + `main-block` [+ `interrupt-block`].
 
-Список `(head arg ...)`: если `head` — символ из набора спецформ или имя `defun`-функции, действует соответствующее правило; иначе это вызов функции (ошибка компиляции, если имя не объявлено в предшествующих `defun`).
+**Семантика форм.**
 
-Пояснения к реализации:
-
-- Пустой список `()` парсится, но **не** допускается как выражение в `codegen`.
-- Пустой файл: `parse_many` → 0 форм; CLI транслятора — ошибка «файл пустой».
-- `(progn e1 … en)`: между формами компилятор вставляет `DROP`, кроме хвоста после последней.
-- `(if c t e)`: в IM присутствуют обе ветки; **выполняется** только выбранная (`JZ`).
-- Арифметика: минимум два аргумента; лишние сворачиваются слева направо той же операцией.
-- `(store addr val)`: на стек кладётся `addr`, затем `val` (вершина — значение); в машине `STORE` снимает сначала значение, затем адрес.
-- Вызов `(f arg …)` допустим только для имён, объявленных в предшествующих `defun`.
+- `()` парсится как `list-expr`, но в `expression` не входит.
+- Несколько `body` в `defun` / `interrupt` эквивалентны `(progn body…)`.
+- `(progn e1 … en)`: между формами вставляется `DROP`, кроме результата последней.
+- `(if c t e)`: в IM обе ветки; при исполнении активна одна (`JZ`).
+- `arith-form`: минимум два аргумента; лишние сворачиваются слева направо той же операцией.
+- `(store addr val)`: на стек — сначала `addr`, затем `val` (вершина — значение); `STORE` снимает value, затем addr.
+- `cmp-op` `>`: `SLT` с переставленными аргументами.
+- `user-call`: число аргументов равно числу параметров в соответствующем `defun`.
 
 ### Спецформы и встроенные конструкции
 
@@ -233,7 +281,7 @@ opcode — старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/is
 
 Такты на полный цикл инструкции в **scalar** считаются функцией `scalar_ticks_for_opcode()` ([cpu.py](src/ak_lab4/cpu.py)): для большинства опкодов `1 + len(phases)` (один такт `FETCH`, затем по одной именованной фазе на такт). Исключение: `NOP`, `HALT`, `EI`, `CLI` — `FETCH` и `writeback` в **одном** такте (итого 1 тик).
 
-Модель — потактовая: один вызов `Cpu.step()` = один такт. Строк `STALL` нет: ожидание выражается фазами `PHASE` (`execute`, `memory`, `mul`, `div`, `branch`, `writeback`). IRQ проверяется в начале каждого такта; незавершённая in-flight инструкция сохраняется в `suspended_user_pipeline` и восстанавливается после `RET` из ISR.
+Модель — потактовая: один вызов `Machine.step()` = один такт. Строк `STALL` нет: ожидание выражается фазами `PHASE` (`execute`, `memory`, `mul`, `div`, `branch`, `writeback`). IRQ проверяется в начале каждого такта; незавершённая in-flight инструкция сохраняется в `suspended_user_pipeline` и восстанавливается после `RET` из ISR.
 
 | Hex | Мнемоника | Такты (scalar) | Фазы после FETCH | Эффект на стеке (кратко) |
 |-----|-----------|----------------|------------------|---------------------------|
@@ -273,7 +321,7 @@ opcode — старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/is
 
 Реализация (паттерн deferred store / DLE / flush для stack из методички):
 
-1. При `Cpu.superscalar=True` за один вызов `step` читается окно двух слов подряд из IM (`PC` и `PC+1`), и для безопасных пар возможна двойная выдача (`PAR`).
+1. При `Machine.superscalar=True` за один вызов `step` читается окно двух слов подряд из IM (`PC` и `PC+1`), и для безопасных пар возможна двойная выдача (`PAR`).
 2. Для `STORE` — deferred store: запись сначала в `shadow_stores` (не более одной отложенной записи).
 3. Для `LOAD` — dead load elimination: повторный `LOAD` того же адреса может взять `last_load_addr` / `last_load_value`.
 4. При переполнении shadow — `PAR_FLUSH` (`reason=overflow`), затем новая запись в shadow.
@@ -281,7 +329,7 @@ opcode — старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/is
 6. Один вызов `step` всегда добавляет 1 тик; при `PAR` обе инструкции завершают все фазы в этом такте.
 7. В журнале: `PAR`, `PAR_FLUSH`, `BG_STORE`, `PAR_BLOCK`.
 
-По умолчанию `superscalar=False`. Включение: `Cpu(superscalar=True)` или `--superscalar` у симулятора.
+По умолчанию `superscalar=False`. Включение: `Machine(superscalar=True)` или `--superscalar` у симулятора.
 
 Производительность: сравнить `HALT ticks=...` на одном `code.bin` в scalar и superscalar (см. [tests/simulator/test_superscalar.py](tests/simulator/test_superscalar.py)).
 
@@ -314,7 +362,7 @@ opcode — старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/is
 
 Модуль: `python -m ak_lab4.simulator` ([__main__.py](src/ak_lab4/simulator/__main__.py)).
 
-Процессор разделён на **Control Unit** (такт, выборка, фазы, IRQ, PC) и **DataPath** (стек, DM, порты). В Python — классы `ControlUnit`, `DataPath`, состояние в `Cpu` ([cpu.py](src/ak_lab4/cpu.py)). Схемы отражают аппаратную структуру; подробное описание связей CU — в [sceme/README-ControlUnit.md](sceme/README-ControlUnit.md).
+Процессор разделён на **Control Unit** (такт, выборка, фазы, IRQ, PC) и **DataPath** (стек, DM, порты). В Python — классы `Machine`, `ControlUnit`, `DataPath` ([machine.py](src/ak_lab4/machine.py)): CU владеет PC/тактом/pipeline/IRQ, DP — стеком, DM, портами и shadow store. Схемы отражают аппаратную структуру.
 
 ### Интерфейс командной строки
 

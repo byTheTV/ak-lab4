@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections import deque
 from pathlib import Path
 
-from ak_lab4.cpu import Cpu, init_memory_from_segments, run_program
 from ak_lab4.loader import load_words_le
+from ak_lab4.machine import Machine, init_memory_from_segments, run_program
 from ak_lab4.memory import STACK_BASE
 from ak_lab4.simulator.__main__ import main as simulator_main
 from ak_lab4.translator import compile_program, parse
@@ -31,7 +31,7 @@ def test_in_port_roundtrip_via_cli(tmp_path: Path) -> None:
     words = load_words_le(code)
     dwords = load_words_le(data)
     im, dm = init_memory_from_segments(words, dwords)
-    cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, input_queue=deque([99]))
-    run_program(cpu, max_ticks=100000)
-    assert cpu.halted
-    assert cpu.dm[STACK_BASE] == 99
+    machine = Machine(im=im, dm=dm, pc=0, sp=STACK_BASE, input_queue=deque([99]))
+    run_program(machine, max_ticks=100000)
+    assert machine.halted
+    assert machine.dm[STACK_BASE] == 99

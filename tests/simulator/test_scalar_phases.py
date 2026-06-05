@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from io import StringIO
 
-from ak_lab4.cpu import Cpu, init_memory_from_segments, run_program
 from ak_lab4.isa import Opcode, pack_word
+from ak_lab4.machine import Machine, init_memory_from_segments, run_program
 from ak_lab4.memory import STACK_BASE
 
 
@@ -17,13 +17,13 @@ def test_scalar_push_imm_uses_fetch_and_phase() -> None:
     code = [_w(Opcode.PUSH_IMM, 42), _w(Opcode.HALT)]
     im, dm = init_memory_from_segments(code, [])
     buf = StringIO()
-    cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, superscalar=False)
-    cpu.step(log=buf)
-    cpu.step(log=buf)
+    machine = Machine(im=im, dm=dm, pc=0, sp=STACK_BASE, superscalar=False)
+    machine.step(log=buf)
+    machine.step(log=buf)
     lines = buf.getvalue().splitlines()
     assert any("\tFETCH\t" in ln for ln in lines)
     assert any("\tPHASE\t" in ln and "\twriteback\t" in ln for ln in lines)
-    assert cpu.dm[STACK_BASE] == 42
+    assert machine.dm[STACK_BASE] == 42
 
 
 def test_scalar_jz_taken_skips_fallthrough() -> None:
@@ -38,11 +38,11 @@ def test_scalar_jz_taken_skips_fallthrough() -> None:
         _w(Opcode.HALT),
     ]
     im, dm = init_memory_from_segments(code, [])
-    cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE)
-    run_program(cpu, max_ticks=100)
-    assert cpu.halted
-    assert cpu.sp == STACK_BASE + 1
-    assert cpu.dm[STACK_BASE] == 99
+    machine = Machine(im=im, dm=dm, pc=0, sp=STACK_BASE)
+    run_program(machine, max_ticks=100)
+    assert machine.halted
+    assert machine.sp == STACK_BASE + 1
+    assert machine.dm[STACK_BASE] == 99
 
 
 def test_scalar_mul_phases() -> None:
@@ -53,7 +53,7 @@ def test_scalar_mul_phases() -> None:
         _w(Opcode.HALT),
     ]
     im, dm = init_memory_from_segments(code, [])
-    cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE)
-    run_program(cpu, max_ticks=100)
-    assert cpu.halted
-    assert cpu.dm[STACK_BASE] == 42
+    machine = Machine(im=im, dm=dm, pc=0, sp=STACK_BASE)
+    run_program(machine, max_ticks=100)
+    assert machine.halted
+    assert machine.dm[STACK_BASE] == 42
