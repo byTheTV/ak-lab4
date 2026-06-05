@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from ak_lab4.cpu import Cpu, init_memory_from_segments, run_program
+from ak_lab4.machine import Machine, init_memory_from_segments, run_program
 from ak_lab4.io_schedule import IrqScheduleEvent, load_irq_schedule_json
 from ak_lab4.isa import Opcode, pack_word
 from ak_lab4.memory import STACK_BASE
@@ -31,10 +31,10 @@ def test_irq_schedule_delivers_to_handler_via_in() -> None:
     ).code
     sched = (IrqScheduleEvent(0, 0, 66),)
     im, dm = init_memory_from_segments(words, [])
-    cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
-    run_program(cpu, max_ticks=50_000)
-    assert cpu.halted
-    assert cpu.irq_line_value[0] == 66
+    machine = Machine(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
+    run_program(machine, max_ticks=50_000)
+    assert machine.halted
+    assert machine.irq_line_value[0] == 66
 
 
 def test_irq_tick_zero_delivers_before_first_issue() -> None:
@@ -45,13 +45,13 @@ def test_irq_tick_zero_delivers_before_first_issue() -> None:
     im[10] = pack_word(Opcode.HALT, 0)
     im[20] = pack_word(Opcode.RET, 0)
     sched = (IrqScheduleEvent(0, 0, ord("A")),)
-    cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
+    machine = Machine(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
 
-    cpu.step()
+    machine.step()
 
-    assert cpu.ticks == 1
-    assert cpu.pc == 20
-    assert cpu.interrupt_depth == 1
+    assert machine.ticks == 1
+    assert machine.pc == 20
+    assert machine.interrupt_depth == 1
 
 
 def test_irq_tick_one_not_delivered_on_first_step() -> None:
@@ -62,13 +62,13 @@ def test_irq_tick_one_not_delivered_on_first_step() -> None:
     im[10] = pack_word(Opcode.HALT, 0)
     im[20] = pack_word(Opcode.RET, 0)
     sched = (IrqScheduleEvent(1, 0, ord("A")),)
-    cpu = Cpu(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
+    machine = Machine(im=im, dm=dm, pc=0, sp=STACK_BASE, irq_schedule=sched)
 
-    cpu.step()
+    machine.step()
     # JMP имеет отдельный writeback-тик: после первого шага он только in-flight.
-    assert cpu.pc == 0
-    assert cpu.interrupt_depth == 0
+    assert machine.pc == 0
+    assert machine.interrupt_depth == 0
 
-    cpu.step()
-    assert cpu.pc == 20
-    assert cpu.interrupt_depth == 1
+    machine.step()
+    assert machine.pc == 20
+    assert machine.interrupt_depth == 1

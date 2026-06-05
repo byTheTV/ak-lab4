@@ -7,15 +7,15 @@ import json
 import sys
 from pathlib import Path
 
-from ak_lab4.cpu import Cpu, CpuFault, init_memory_from_segments, run_program
+from ak_lab4.machine import Machine, MachineFault, init_memory_from_segments, run_program
 from ak_lab4.io_schedule import IrqScheduleEvent, load_irq_schedule_json
 from ak_lab4.loader import load_words_le
 from ak_lab4.memory import STACK_BASE
 
 
-def apply_input_to_cpu(cpu: Cpu, spec: str) -> None:
+def apply_input_to_machine(machine: Machine, spec: str) -> None:
     raw = sys.stdin.buffer.read() if spec == "-" else Path(spec).read_bytes()
-    cpu.input_queue.extend(raw)
+    machine.input_queue.extend(raw)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -70,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"--schedule: {e}", file=sys.stderr)
             return 2
 
-    cpu = Cpu(
+    machine = Machine(
         im=im,
         dm=dm,
         pc=0,
@@ -81,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.input is not None:
         try:
-            apply_input_to_cpu(cpu, args.input)
+            apply_input_to_machine(machine, args.input)
         except OSError as e:
             print(e, file=sys.stderr)
             return 2
@@ -90,18 +90,18 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.log is not None:
             log_file = args.log.open("w", encoding="utf-8")
-        run_program(cpu, max_ticks=args.max_ticks, log=log_file)
-    except CpuFault as e:
+        run_program(machine, max_ticks=args.max_ticks, log=log_file)
+    except MachineFault as e:
         print(str(e), file=sys.stderr)
         return 1
     finally:
         if log_file is not None:
             log_file.close()
 
-    if not cpu.halted:
+    if not machine.halted:
         print("упёрлись в лимит тактов - HALT не был", file=sys.stderr)
         return 1
-    print(f"HALT ticks={cpu.ticks} PC={cpu.pc} SP=0x{cpu.sp:X}")
+    print(f"HALT ticks={machine.ticks} PC={machine.pc} SP=0x{machine.sp:X}")
     return 0
 
 

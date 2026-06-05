@@ -233,7 +233,7 @@ opcode — старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/is
 
 Такты на полный цикл инструкции в **scalar** считаются функцией `scalar_ticks_for_opcode()` ([cpu.py](src/ak_lab4/cpu.py)): для большинства опкодов `1 + len(phases)` (один такт `FETCH`, затем по одной именованной фазе на такт). Исключение: `NOP`, `HALT`, `EI`, `CLI` — `FETCH` и `writeback` в **одном** такте (итого 1 тик).
 
-Модель — потактовая: один вызов `Cpu.step()` = один такт. Строк `STALL` нет: ожидание выражается фазами `PHASE` (`execute`, `memory`, `mul`, `div`, `branch`, `writeback`). IRQ проверяется в начале каждого такта; незавершённая in-flight инструкция сохраняется в `suspended_user_pipeline` и восстанавливается после `RET` из ISR.
+Модель — потактовая: один вызов `Machine.step()` = один такт. Строк `STALL` нет: ожидание выражается фазами `PHASE` (`execute`, `memory`, `mul`, `div`, `branch`, `writeback`). IRQ проверяется в начале каждого такта; незавершённая in-flight инструкция сохраняется в `suspended_user_pipeline` и восстанавливается после `RET` из ISR.
 
 | Hex | Мнемоника | Такты (scalar) | Фазы после FETCH | Эффект на стеке (кратко) |
 |-----|-----------|----------------|------------------|---------------------------|
@@ -273,7 +273,7 @@ opcode — старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/is
 
 Реализация (паттерн deferred store / DLE / flush для stack из методички):
 
-1. При `Cpu.superscalar=True` за один вызов `step` читается окно двух слов подряд из IM (`PC` и `PC+1`), и для безопасных пар возможна двойная выдача (`PAR`).
+1. При `Machine.superscalar=True` за один вызов `step` читается окно двух слов подряд из IM (`PC` и `PC+1`), и для безопасных пар возможна двойная выдача (`PAR`).
 2. Для `STORE` — deferred store: запись сначала в `shadow_stores` (не более одной отложенной записи).
 3. Для `LOAD` — dead load elimination: повторный `LOAD` того же адреса может взять `last_load_addr` / `last_load_value`.
 4. При переполнении shadow — `PAR_FLUSH` (`reason=overflow`), затем новая запись в shadow.
@@ -281,7 +281,7 @@ opcode — старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/is
 6. Один вызов `step` всегда добавляет 1 тик; при `PAR` обе инструкции завершают все фазы в этом такте.
 7. В журнале: `PAR`, `PAR_FLUSH`, `BG_STORE`, `PAR_BLOCK`.
 
-По умолчанию `superscalar=False`. Включение: `Cpu(superscalar=True)` или `--superscalar` у симулятора.
+По умолчанию `superscalar=False`. Включение: `Machine(superscalar=True)` или `--superscalar` у симулятора.
 
 Производительность: сравнить `HALT ticks=...` на одном `code.bin` в scalar и superscalar (см. [tests/simulator/test_superscalar.py](tests/simulator/test_superscalar.py)).
 
@@ -314,7 +314,7 @@ opcode — старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/is
 
 Модуль: `python -m ak_lab4.simulator` ([__main__.py](src/ak_lab4/simulator/__main__.py)).
 
-Процессор разделён на **Control Unit** (такт, выборка, фазы, IRQ, PC) и **DataPath** (стек, DM, порты). В Python — классы `ControlUnit`, `DataPath`, состояние в `Cpu` ([cpu.py](src/ak_lab4/cpu.py)). Схемы отражают аппаратную структуру; подробное описание связей CU — в [sceme/README-ControlUnit.md](sceme/README-ControlUnit.md).
+Процессор разделён на **Control Unit** (такт, выборка, фазы, IRQ, PC) и **DataPath** (стек, DM, порты). В Python — классы `Machine`, `ControlUnit`, `DataPath` ([machine.py](src/ak_lab4/machine.py)): CU владеет PC/тактом/pipeline/IRQ, DP — стеком, DM, портами и shadow store. Схемы отражают аппаратную структуру.
 
 ### Интерфейс командной строки
 

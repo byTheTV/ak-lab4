@@ -21,15 +21,15 @@ _ALL_GOLDEN_CASES = tuple(
 
 @pytest.mark.parametrize("case", _ALL_GOLDEN_CASES)
 def test_golden_output_all_cases(case: str) -> None:
-    cpu = run_case(case, max_ticks=_MAX_TICKS.get(case, 10_000_000))
-    assert bytes(cpu.out_bytes) == read_expected_output(case)
+    machine = run_case(case, max_ticks=_MAX_TICKS.get(case, 10_000_000))
+    assert bytes(machine.out_bytes) == read_expected_output(case)
 
 
 def test_golden_output_prob1_superscalar() -> None:
     case = "prob1"
-    cpu = run_case(
+    machine = run_case(
         case,
         max_ticks=_MAX_TICKS.get(case, 10_000_000),
         superscalar=True,
     )
-    assert bytes(cpu.out_bytes) == read_expected_output(case)
+    assert bytes(machine.out_bytes) == read_expected_output(case)

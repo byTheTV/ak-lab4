@@ -1,8 +1,10 @@
-"""Лабораторная: транслятор и симулятор CPU"""
+"""Лабораторная: транслятор и симулятор процессора"""
 
-from ak_lab4.cpu import (
-    Cpu,
-    CpuFault,
+from ak_lab4.machine import (
+    ControlUnit,
+    DataPath,
+    Machine,
+    MachineFault,
     init_memory_from_segments,
     run_program,
     scalar_ticks_for_opcode,
@@ -11,8 +13,10 @@ from ak_lab4.cpu import (
 __version__ = "0.1.0"
 
 __all__ = [
-    "Cpu",
-    "CpuFault",
+    "ControlUnit",
+    "DataPath",
+    "Machine",
+    "MachineFault",
     "init_memory_from_segments",
     "run_program",
     "scalar_ticks_for_opcode",
