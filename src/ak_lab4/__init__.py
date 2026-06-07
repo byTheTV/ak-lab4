@@ -1,5 +1,3 @@
-"""Лабораторная: транслятор и симулятор процессора"""
-
 from ak_lab4.machine import (
     ControlUnit,
     DataPath,
