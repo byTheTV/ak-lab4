@@ -1,0 +1,135 @@
+name: cat
+source: |
+  (progn
+    (setq running 1)
+    (ei)
+    (loop (eq running 1) (nop)))
+
+  (interrupt 0
+    (progn
+      (setq c (in))
+      (if (= c -1)
+          (setq running 0)
+          (out c))))
+input:
+- tick: 80
+  irq: 0
+  byte: a
+- tick: 200
+  irq: 0
+  byte: b
+- tick: 320
+  irq: 0
+  byte: c
+- tick: 440
+  irq: 0
+  eof: true
+max_ticks: 10000000
+fail_on_max_ticks: true
+output: abc
+code_listing: |
+  0 - 20000009
+  1 - 20000018
+  2 - 20000000
+  3 - 20000000
+  4 - 20000000
+  5 - 20000000
+  6 - 20000000
+  7 - 20000000
+  8 - 20000000
+  9 - 01000000
+  10 - 01000001
+  11 - 05000000
+  12 - 01000000
+  13 - 04000000
+  14 - 03000000
+  15 - 33000000
+  16 - 01000000
+  17 - 04000000
+  18 - 01000001
+  19 - 15000000
+  20 - 21000017
+  21 - 00000000
+  22 - 20000010
+  23 - 32000000
+  24 - 01000001
+  25 - 30000000
+  26 - 05000000
+  27 - 01000001
+  28 - 04000000
+  29 - 03000000
+  30 - 01000001
+  31 - 04000000
+  32 - 01FFFFFF
+  33 - 15000000
+  34 - 21000029
+  35 - 01000000
+  36 - 01000000
+  37 - 05000000
+  38 - 01000000
+  39 - 04000000
+  40 - 2000002D
+  41 - 01000001
+  42 - 04000000
+  43 - 02000000
+  44 - 31000001
+  45 - 03000000
+  46 - 23000000
+data_listing: ''
+log_excerpt:
+- "1\tFETCH\t0\t20000009\tUSR"
+- "2\tPHASE\t1\twriteback\t0\tUSR"
+- "3\tFETCH\t9\t01000000\tUSR"
+- "4\tPHASE\t1\twriteback\t0\tUSR"
+- "5\tFETCH\t10\t01000001\tUSR"
+- "6\tPHASE\t1\twriteback\t0\tUSR"
+- "7\tFETCH\t11\t05000000\tUSR"
+- "8\tPHASE\t1\texecute\t2\tUSR"
+- "9\tPHASE\t2\tmemory\t1\tUSR"
+- "10\tPHASE\t3\twriteback\t0\tUSR"
+- "11\tFETCH\t12\t01000000\tUSR"
+- "12\tPHASE\t1\twriteback\t0\tUSR"
+- "13\tFETCH\t13\t04000000\tUSR"
+- "14\tPHASE\t1\texecute\t2\tUSR"
+- "15\tPHASE\t2\tmemory\t1\tUSR"
+- "16\tPHASE\t3\twriteback\t0\tUSR"
+- "17\tFETCH\t14\t03000000\tUSR"
+- "18\tPHASE\t1\twriteback\t0\tUSR"
+- "80\tFETCH\t18\t01000001\tUSR"
+- "81\tIRQ_TRAP\t0\tISR"
+- "82\tFETCH\t24\t01000001\tISR"
+- "83\tPHASE\t1\twriteback\t0\tISR"
+- "84\tFETCH\t25\t30000000\tISR"
+- "85\tPHASE\t1\texecute\t1\tISR"
+- "200\tPHASE\t3\twriteback\t0\tUSR"
+- "201\tIRQ_TRAP\t0\tISR"
+- "202\tFETCH\t24\t01000001\tISR"
+- "203\tPHASE\t1\twriteback\t0\tISR"
+- "204\tFETCH\t25\t30000000\tISR"
+- "205\tPHASE\t1\texecute\t1\tISR"
+- "320\tPHASE\t2\tmemory\t1\tUSR"
+- "321\tIRQ_TRAP\t0\tISR"
+- "322\tFETCH\t24\t01000001\tISR"
+- "323\tPHASE\t1\twriteback\t0\tISR"
+- "324\tFETCH\t25\t30000000\tISR"
+- "325\tPHASE\t1\texecute\t1\tISR"
+- "440\tPHASE\t1\texecute\t2\tUSR"
+- "441\tIRQ_TRAP\t0\tISR"
+- "442\tFETCH\t24\t01000001\tISR"
+- "443\tPHASE\t1\twriteback\t0\tISR"
+- "444\tFETCH\t25\t30000000\tISR"
+- "445\tPHASE\t1\texecute\t1\tISR"
+- "494\tPHASE\t2\twriteback\t0\tUSR"
+- "495\tPHASE\t2\tmemory\t1\tUSR"
+- "496\tPHASE\t3\twriteback\t0\tUSR"
+- "497\tFETCH\t18\t01000001\tUSR"
+- "498\tPHASE\t1\twriteback\t0\tUSR"
+- "499\tFETCH\t19\t15000000\tUSR"
+- "500\tPHASE\t1\texecute\t1\tUSR"
+- "501\tPHASE\t2\twriteback\t0\tUSR"
+- "502\tFETCH\t20\t21000017\tUSR"
+- "503\tPHASE\t1\texecute\t2\tUSR"
+- "504\tPHASE\t2\tbranch\t1\tUSR"
+- "505\tPHASE\t3\twriteback\t0\tUSR"
+- "506\tFETCH\t23\t32000000\tUSR"
+- "506\tPHASE\t1\twriteback\t0\tUSR"

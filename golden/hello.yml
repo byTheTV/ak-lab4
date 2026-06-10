@@ -1,0 +1,120 @@
+name: hello
+source: |
+  (defun emit-ch-at (base idx)
+    (out (load (+ (+ base 1) idx))))
+
+  (defun emit-pstr-rec (base idx)
+    (if (< idx (load base))
+        (progn
+          (emit-ch-at base idx)
+          (emit-pstr-rec base (+ idx 1)))
+        0))
+
+  (defun emit-pstr (base)
+    (emit-pstr-rec base 0))
+
+  (emit-pstr "Hi\n")
+input: []
+max_ticks: 10000000
+fail_on_max_ticks: true
+output: |
+  Hi
+code_listing: |
+  0 - 20000037
+  1 - 01000004
+  2 - 04000000
+  3 - 01000001
+  4 - 10000000
+  5 - 01000005
+  6 - 04000000
+  7 - 10000000
+  8 - 04000000
+  9 - 02000000
+  10 - 31000001
+  11 - 06000000
+  12 - 23000000
+  13 - 01000007
+  14 - 04000000
+  15 - 01000006
+  16 - 04000000
+  17 - 04000000
+  18 - 16000000
+  19 - 2100002A
+  20 - 01000004
+  21 - 01000006
+  22 - 04000000
+  23 - 05000000
+  24 - 01000005
+  25 - 01000007
+  26 - 04000000
+  27 - 05000000
+  28 - 22000001
+  29 - 03000000
+  30 - 01000006
+  31 - 01000006
+  32 - 04000000
+  33 - 05000000
+  34 - 01000007
+  35 - 01000007
+  36 - 04000000
+  37 - 01000001
+  38 - 10000000
+  39 - 05000000
+  40 - 2200000D
+  41 - 2000002B
+  42 - 01000000
+  43 - 06000000
+  44 - 23000000
+  45 - 01000006
+  46 - 01000008
+  47 - 04000000
+  48 - 05000000
+  49 - 01000007
+  50 - 01000000
+  51 - 05000000
+  52 - 2200000D
+  53 - 06000000
+  54 - 23000000
+  55 - 01000008
+  56 - 01000000
+  57 - 05000000
+  58 - 2200002D
+  59 - 32000000
+data_listing: |
+  0 - 00000003
+  1 - 00000048
+  2 - 00000069
+  3 - 0000000A
+log_excerpt:
+- "1\tFETCH\t0\t20000037\tUSR"
+- "2\tPHASE\t1\twriteback\t0\tUSR"
+- "3\tFETCH\t55\t01000008\tUSR"
+- "4\tPHASE\t1\twriteback\t0\tUSR"
+- "5\tFETCH\t56\t01000000\tUSR"
+- "6\tPHASE\t1\twriteback\t0\tUSR"
+- "7\tFETCH\t57\t05000000\tUSR"
+- "8\tPHASE\t1\texecute\t2\tUSR"
+- "9\tPHASE\t2\tmemory\t1\tUSR"
+- "10\tPHASE\t3\twriteback\t0\tUSR"
+- "11\tFETCH\t58\t2200002D\tUSR"
+- "12\tPHASE\t1\texecute\t1\tUSR"
+- "13\tPHASE\t2\twriteback\t0\tUSR"
+- "14\tFETCH\t45\t01000006\tUSR"
+- "15\tPHASE\t1\twriteback\t0\tUSR"
+- "16\tFETCH\t46\t01000008\tUSR"
+- "17\tPHASE\t1\twriteback\t0\tUSR"
+- "18\tFETCH\t47\t04000000\tUSR"
+- "435\tFETCH\t41\t2000002B\tUSR"
+- "436\tPHASE\t1\twriteback\t0\tUSR"
+- "437\tFETCH\t43\t06000000\tUSR"
+- "438\tPHASE\t1\twriteback\t0\tUSR"
+- "439\tFETCH\t44\t23000000\tUSR"
+- "440\tPHASE\t1\texecute\t1\tUSR"
+- "441\tPHASE\t2\twriteback\t0\tUSR"
+- "442\tFETCH\t53\t06000000\tUSR"
+- "443\tPHASE\t1\twriteback\t0\tUSR"
+- "444\tFETCH\t54\t23000000\tUSR"
+- "445\tPHASE\t1\texecute\t1\tUSR"
+- "446\tPHASE\t2\twriteback\t0\tUSR"
+- "447\tFETCH\t59\t32000000\tUSR"
+- "447\tPHASE\t1\twriteback\t0\tUSR"

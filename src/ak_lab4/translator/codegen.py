@@ -326,7 +326,7 @@ def _emit(
                     )
                     parts.extend(segment)
                     cur = pc0 + len(parts)
-                    if i < len(args) - 1:
+                    if i < len(args) - 1 and _emit_leaves_stack_value(args[i]):
                         parts.append(pack_word(Opcode.DROP, 0))
                         cur = pc0 + len(parts)
                 return parts
@@ -430,6 +430,39 @@ def _emit(
                         pack_word(Opcode.PUSH_IMM, _check_imm24(addr)),
                         pack_word(Opcode.LOAD, 0),
                     ]
+                )
+            if head.name == "loop":
+                if len(args) != 2:
+                    raise CodegenError("loop: условие продолжения и тело")
+                cond_e, body_e = args
+                loop_start = pc0
+                cond_c = _emit(
+                    cond_e,
+                    global_slots,
+                    loop_start,
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                body_pc = loop_start + len(cond_c) + 1
+                body_c = _emit(
+                    body_e,
+                    global_slots,
+                    body_pc,
+                    funcs,
+                    param_scope,
+                    func_param_sig,
+                    param_slot_addr,
+                    string_addrs,
+                )
+                exit_pc = body_pc + len(body_c) + 1
+                return (
+                    cond_c
+                    + [pack_word(Opcode.JZ, exit_pc)]
+                    + body_c
+                    + [pack_word(Opcode.JMP, loop_start)]
                 )
             if head.name == "if":
                 if len(args) != 3:
@@ -688,38 +721,39 @@ def _compile_with_defuns(
     return words
 
 
-def _handler_needs_drop_before_ret(body: Expr) -> bool:
-    """если последняя форма ISR что-то положила на стек - перед RET нужен DROP"""
-
-    def last_form(ex: Expr) -> Expr:
-        if isinstance(ex, SList) and ex.items:
-            head = ex.items[0]
-            if isinstance(head, Symbol) and head.name == "progn" and len(ex.items) >= 2:
-                return last_form(ex.items[-1])
-        return ex
-
-    lf = last_form(body)
-    if isinstance(lf, StrLit):
+def _emit_leaves_stack_value(ex: Expr) -> bool:
+    if isinstance(ex, IntLit | StrLit):
         return True
-    if isinstance(lf, SList) and lf.items:
-        h = lf.items[0]
-        if isinstance(h, Symbol) and h.name in (
-            "in",
-            "+",
-            "-",
-            "*",
-            "/",
-            "mod",
-            "eq",
-            "=",
-            "<",
-            ">",
-            "load",
-            "store",
-            "setq",
-        ):
+    if not isinstance(ex, SList) or not ex.items:
+        return False
+    head = ex.items[0]
+    if not isinstance(head, Symbol):
+        return True
+    if head.name in ("ei", "di", "nop", "drop", "loop", "out"):
+        return False
+    if head.name == "progn":
+        return _emit_leaves_stack_value(ex.items[-1])
+    return True
+
+
+def _handler_needs_drop_before_ret(body: Expr) -> bool:
+    def leaves_value(ex: Expr) -> bool:
+        if isinstance(ex, IntLit | StrLit):
             return True
-    return False
+        if not isinstance(ex, SList) or not ex.items:
+            return False
+        head = ex.items[0]
+        if not isinstance(head, Symbol):
+            return True
+        if head.name in ("ei", "di", "nop", "drop", "loop", "out"):
+            return False
+        if head.name == "progn":
+            return leaves_value(ex.items[-1])
+        if head.name == "if" and len(ex.items) == 4:
+            return leaves_value(ex.items[2]) or leaves_value(ex.items[3])
+        return True
+
+    return leaves_value(body)
 
 
 def _compile_with_defuns_interrupts(
@@ -815,9 +849,7 @@ def _compile_with_defuns_interrupts(
         entry = len(words)
         handler_pc[irq] = entry
         hbody = irq_handlers[irq]
-        extra: list[int] = []
-        if _handler_needs_drop_before_ret(hbody):
-            extra.append(pack_word(Opcode.DROP, 0))
+        extra = [pack_word(Opcode.DROP, 0)] if _handler_needs_drop_before_ret(hbody) else []
         words.extend(
             _emit(
                 hbody,
