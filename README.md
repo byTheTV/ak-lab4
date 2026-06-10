@@ -96,6 +96,7 @@ expression      ::= integer
 special-form    ::= setq-form
                   | if-form
                   | progn-form
+                  | loop-form
                   | load-form
                   | store-form
                   | io-form
@@ -117,6 +118,7 @@ interrupt-form  ::= "(" "interrupt" integer body+ ")"
 setq-form       ::= "(" "setq" symbol expression ")"
 if-form         ::= "(" "if" expression expression expression ")"
 progn-form      ::= "(" "progn" expression+ ")"
+loop-form       ::= "(" "loop" expression expression ")"
 
 load-form       ::= "(" "load" expression ")"
 store-form      ::= "(" "store" expression expression ")"
@@ -152,6 +154,7 @@ arith-op        ::= "+" | "-" | "*" | "/" | "mod"
 - Несколько `body` в `defun` / `interrupt` эквивалентны `(progn body…)`.
 - `(progn e1 … en)`: между формами вставляется `DROP`, кроме результата последней.
 - `(if c t e)`: в IM обе ветки; при исполнении активна одна (`JZ`).
+- `(loop cond body)`: в начале итерации вычисляется `cond`; при 0 — выход (`JZ`), иначе `body` и переход к проверке (`JMP`).
 - `arith-form`: минимум два аргумента; лишние сворачиваются слева направо той же операцией.
 - `(store addr val)`: на стек — сначала `addr`, затем `val` (вершина — значение); `STORE` снимает value, затем addr.
 - `cmp-op` `>`: `SLT` с переставленными аргументами.
@@ -165,6 +168,7 @@ arith-op        ::= "+" | "-" | "*" | "/" | "mod"
 | `(defun f (p ...) body...)` | функция; все `defun` должны идти до основного кода |
 | `(progn e1 e2 ...)` | последовательное вычисление, значение — последнее |
 | `(if cond then else)` | условие; ветки — выражения |
+| `(loop cond body)` | цикл: пока `cond` ≠ 0, выполняется `body` |
 | `(load addr)` / `(store addr val)` | чтение/запись DM по адресу |
 | `(in)` / `(out expr)` | порт ввода/вывода (см. ISA) |
 | `(ei)` / `(di)` | разрешить / запретить маскируемые IRQ |
@@ -174,7 +178,7 @@ arith-op        ::= "+" | "-" | "*" | "/" | "mod"
 
 Строки: литерал `"..."` попадает в сегмент данных (pstr); при необходимости данных транслятор требует `--data-out`.
 
-Ограничения текущего подмножества: отдельной спецформы `while` нет; итерации выражаются через рекурсивные `defun` + `if` (требование варианта `lisp`).
+Ограничения текущего подмножества: отдельных спецформ `while`/`for` нет; итерации — через `(loop cond body)` или рекурсивные `defun` + `if` (требование варианта `lisp`).
 
 ### Семантика
 
@@ -186,13 +190,23 @@ arith-op        ::= "+" | "-" | "*" | "/" | "mod"
 ### Пример программы
 
 ```lisp
-(progn
-  (out 72)   ; H
-  (out 105)  ; i
-  (out 10))  ; newline
+(defun emit-ch-at (base idx)
+  (out (load (+ (+ base 1) idx))))
+
+(defun emit-pstr-rec (base idx)
+  (if (< idx (load base))
+      (progn
+        (emit-ch-at base idx)
+        (emit-pstr-rec base (+ idx 1)))
+      0))
+
+(defun emit-pstr (base)
+  (emit-pstr-rec base 0))
+
+(emit-pstr "Hi\n")
 ```
 
-(фрагмент из [golden/hello/source.tv](golden/hello/source.tv))
+(поле `source` в [golden/hello.yml](golden/hello.yml))
 
 ---
 
@@ -279,7 +293,7 @@ opcode — старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/is
 
 ### Набор команд и такты
 
-Такты на полный цикл инструкции в **scalar** считаются функцией `scalar_ticks_for_opcode()` ([cpu.py](src/ak_lab4/cpu.py)): для большинства опкодов `1 + len(phases)` (один такт `FETCH`, затем по одной именованной фазе на такт). Исключение: `NOP`, `HALT`, `EI`, `CLI` — `FETCH` и `writeback` в **одном** такте (итого 1 тик).
+Такты на полный цикл инструкции в **scalar** считаются функцией `scalar_ticks_for_opcode()` ([machine.py](src/ak_lab4/machine.py)): для большинства опкодов `1 + len(phases)` (один такт `FETCH`, затем по одной именованной фазе на такт). Исключение: `NOP`, `HALT`, `EI`, `CLI` — `FETCH` и `writeback` в **одном** такте (итого 1 тик).
 
 Модель — потактовая: один вызов `Machine.step()` = один такт. Строк `STALL` нет: ожидание выражается фазами `PHASE` (`execute`, `memory`, `mul`, `div`, `branch`, `writeback`). IRQ проверяется в начале каждого такта; незавершённая in-flight инструкция сохраняется в `suspended_user_pipeline` и восстанавливается после `RET` из ISR.
 
@@ -331,7 +345,7 @@ opcode — старший байт (`Opcode` в [isa/__init__.py](src/ak_lab4/is
 
 По умолчанию `superscalar=False`. Включение: `Machine(superscalar=True)` или `--superscalar` у симулятора.
 
-Производительность: сравнить `HALT ticks=...` на одном `code.bin` в scalar и superscalar (см. [tests/simulator/test_superscalar.py](tests/simulator/test_superscalar.py)).
+Производительность: сравнить `HALT ticks=...` на одном `code.bin` в scalar и superscalar (см. `test_superscalar_fewer_ticks_than_scalar` в [test_machine.py](tests/test_machine.py); для `prob1` — `test_golden_prob1_superscalar_output` в [test_golden.py](tests/test_golden.py)).
 
 ---
 
@@ -423,7 +437,7 @@ ControlUnit (PNG):
 Проверки: **качество + функциональность + регрессии**.
 
 - **CI:** ruff (lint + format), mypy, pytest ([ci.yml](.github/workflows/ci.yml)).
-- **Юнит/интеграция:** ISA, парсер, кодогенератор, CLI, CPU, IRQ, superscalar, потактовый pipeline.
+- **Юнит/интеграция:** IRQ/`IN` в USR и ISR, superscalar vs scalar ([test_machine.py](tests/test_machine.py)).
 - **Golden:** транслятор + симулятор, сверка с эталоном ([golden_support.py](tests/golden_support.py), [test_golden.py](tests/test_golden.py)).
 
 ### Набор golden-кейсов
@@ -450,20 +464,17 @@ pytest tests/test_golden.py -k prob1
 
 ### Покрытие кода
 
-Прогон (Windows, Python 3.11): `pytest --cov=ak_lab4 --cov-report=term-missing:skip-covered` — **51** тест, все прошли. Сводка (файл `coverage-summary.md` генерируется тем же прогоном с `--cov-report=markdown:coverage-summary.md`, в git не коммитится):
+Прогон как в CI (Python 3.12): `pytest --cov=ak_lab4 --cov-report=term-missing:skip-covered` — **12** тестов (6 golden-кейсов × параметризация + IRQ/superscalar + синхронизация `prob1`). Сводка `coverage-summary.md` генерируется job `pytest` в [ci.yml](.github/workflows/ci.yml) (`--cov-report=markdown:coverage-summary.md`), в git не коммитится.
 
 | Модуль | Stmts | Miss | Cover |
 |--------|------:|-----:|------:|
-| `src/ak_lab4/cpu.py` | 569 | 84 | **83%** |
-| `src/ak_lab4/translator/codegen.py` | 469 | 114 | **73%** |
-| `src/ak_lab4/translator/lexer.py` | 102 | 3 | **95%** |
-| `src/ak_lab4/translator/parser.py` | 97 | 14 | **82%** |
-| `src/ak_lab4/translator/cli.py` | 49 | 21 | **56%** |
-| `src/ak_lab4/io_schedule.py` | 40 | 11 | **68%** |
-| `src/ak_lab4/loader.py` | 20 | 2 | **88%** |
+| `src/ak_lab4/machine.py` | 644 | 81 | **86%** |
+| `src/ak_lab4/translator/codegen.py` | 492 | 68 | **82%** |
+| `src/ak_lab4/translator/lexer.py` | 102 | 10 | **87%** |
+| `src/ak_lab4/translator/parser.py` | 97 | 25 | **71%** |
 | `src/ak_lab4/isa/__init__.py` | 42 | 0 | **100%** |
 | `src/ak_lab4/memory.py` | 4 | 0 | **100%** |
-| **Итого** | **1427** | **251** | **80%** |
+| **Итого** | **1527** | **293** | **78%** |
 
 
 ### Пример использования
