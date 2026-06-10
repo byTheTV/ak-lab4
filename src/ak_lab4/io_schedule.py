@@ -11,11 +11,10 @@ from ak_lab4.isa import NUM_IRQ_LINES
 
 @dataclass(frozen=True)
 class IrqScheduleEvent:
-    """На логическом такте step (с нуля) значение на линии irq."""
-
     tick: int
     irq: int
-    value: int  # 0...255
+    value: int = 0
+    eof: bool = False
 
 
 def _byte_from_json_value(v: object) -> int:
@@ -47,7 +46,8 @@ def load_irq_schedule_json(path: Path) -> tuple[IrqScheduleEvent, ...]:
         if irq < 0 or irq >= NUM_IRQ_LINES:
             msg = f"schedule: irq вне 0...{NUM_IRQ_LINES - 1}"
             raise ValueError(msg)
-        value = _byte_from_json_value(o.get("value", 0))
-        out.append(IrqScheduleEvent(tick=tick, irq=irq, value=value))
+        eof = bool(o.get("eof", False))
+        value = 0 if eof else _byte_from_json_value(o.get("value", 0))
+        out.append(IrqScheduleEvent(tick=tick, irq=irq, value=value, eof=eof))
     out.sort(key=lambda e: e.tick)
     return tuple(out)

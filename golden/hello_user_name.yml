@@ -1,0 +1,317 @@
+name: hello_user_name
+source: |
+  (defun emit-ch-at (base idx)
+    (out (load (+ (+ base 1) idx))))
+
+  (defun emit-pstr-rec (base idx)
+    (if (< idx (load base))
+        (progn
+          (emit-ch-at base idx)
+          (emit-pstr-rec base (+ idx 1)))
+        0))
+
+  (defun emit-pstr (base)
+    (emit-pstr-rec base 0))
+
+  (progn
+    (setq done 0)
+    (setq name_len 0)
+    (setq name_addr 100)
+    (emit-pstr "What is your name?\n")
+    (ei)
+    (loop (eq done 0) (nop))
+    (store name_addr name_len)
+    (emit-pstr "Hello, ")
+    (emit-pstr name_addr)
+    (emit-pstr "!\n"))
+
+  (interrupt 0
+    (progn
+      (setq ch (in))
+      (if (= ch 10)
+          (setq done 1)
+          (progn
+            (store (+ name_addr (+ name_len 1)) ch)
+            (setq name_len (+ name_len 1))))))
+input:
+- tick: 800
+  irq: 0
+  byte: A
+- tick: 920
+  irq: 0
+  byte: l
+- tick: 1040
+  irq: 0
+  byte: i
+- tick: 1160
+  irq: 0
+  byte: c
+- tick: 1280
+  irq: 0
+  byte: e
+- tick: 1400
+  irq: 0
+  byte: 10
+max_ticks: 10000000
+fail_on_max_ticks: true
+output: |
+  What is your name?
+  Hello, Alice!
+code_listing: |
+  0 - 2000003F
+  1 - 20000075
+  2 - 20000000
+  3 - 20000000
+  4 - 20000000
+  5 - 20000000
+  6 - 20000000
+  7 - 20000000
+  8 - 20000000
+  9 - 01000023
+  10 - 04000000
+  11 - 01000001
+  12 - 10000000
+  13 - 01000024
+  14 - 04000000
+  15 - 10000000
+  16 - 04000000
+  17 - 02000000
+  18 - 31000001
+  19 - 06000000
+  20 - 23000000
+  21 - 01000026
+  22 - 04000000
+  23 - 01000025
+  24 - 04000000
+  25 - 04000000
+  26 - 16000000
+  27 - 21000032
+  28 - 01000023
+  29 - 01000025
+  30 - 04000000
+  31 - 05000000
+  32 - 01000024
+  33 - 01000026
+  34 - 04000000
+  35 - 05000000
+  36 - 22000009
+  37 - 03000000
+  38 - 01000025
+  39 - 01000025
+  40 - 04000000
+  41 - 05000000
+  42 - 01000026
+  43 - 01000026
+  44 - 04000000
+  45 - 01000001
+  46 - 10000000
+  47 - 05000000
+  48 - 22000015
+  49 - 20000033
+  50 - 01000000
+  51 - 06000000
+  52 - 23000000
+  53 - 01000025
+  54 - 01000027
+  55 - 04000000
+  56 - 05000000
+  57 - 01000026
+  58 - 01000000
+  59 - 05000000
+  60 - 22000015
+  61 - 06000000
+  62 - 23000000
+  63 - 0100001F
+  64 - 01000000
+  65 - 05000000
+  66 - 0100001F
+  67 - 04000000
+  68 - 03000000
+  69 - 01000020
+  70 - 01000000
+  71 - 05000000
+  72 - 01000020
+  73 - 04000000
+  74 - 03000000
+  75 - 01000021
+  76 - 01000064
+  77 - 05000000
+  78 - 01000021
+  79 - 04000000
+  80 - 03000000
+  81 - 01000027
+  82 - 01000000
+  83 - 05000000
+  84 - 22000035
+  85 - 03000000
+  86 - 33000000
+  87 - 0100001F
+  88 - 04000000
+  89 - 01000000
+  90 - 15000000
+  91 - 2100005E
+  92 - 00000000
+  93 - 20000057
+  94 - 01000021
+  95 - 04000000
+  96 - 01000020
+  97 - 04000000
+  98 - 05000000
+  99 - 01000000
+  100 - 03000000
+  101 - 01000027
+  102 - 01000014
+  103 - 05000000
+  104 - 22000035
+  105 - 03000000
+  106 - 01000027
+  107 - 01000021
+  108 - 04000000
+  109 - 05000000
+  110 - 22000035
+  111 - 03000000
+  112 - 01000027
+  113 - 0100001C
+  114 - 05000000
+  115 - 22000035
+  116 - 32000000
+  117 - 01000022
+  118 - 30000000
+  119 - 05000000
+  120 - 01000022
+  121 - 04000000
+  122 - 03000000
+  123 - 01000022
+  124 - 04000000
+  125 - 0100000A
+  126 - 15000000
+  127 - 21000086
+  128 - 0100001F
+  129 - 01000001
+  130 - 05000000
+  131 - 0100001F
+  132 - 04000000
+  133 - 2000009A
+  134 - 01000021
+  135 - 04000000
+  136 - 01000020
+  137 - 04000000
+  138 - 01000001
+  139 - 10000000
+  140 - 10000000
+  141 - 01000022
+  142 - 04000000
+  143 - 05000000
+  144 - 01000000
+  145 - 03000000
+  146 - 01000020
+  147 - 01000020
+  148 - 04000000
+  149 - 01000001
+  150 - 10000000
+  151 - 05000000
+  152 - 01000020
+  153 - 04000000
+  154 - 03000000
+  155 - 23000000
+data_listing: |
+  0 - 00000013
+  1 - 00000057
+  2 - 00000068
+  3 - 00000061
+  4 - 00000074
+  5 - 00000020
+  6 - 00000069
+  7 - 00000073
+  8 - 00000020
+  9 - 00000079
+  10 - 0000006F
+  11 - 00000075
+  12 - 00000072
+  13 - 00000020
+  14 - 0000006E
+  15 - 00000061
+  16 - 0000006D
+  17 - 00000065
+  18 - 0000003F
+  19 - 0000000A
+  20 - 00000007
+  21 - 00000048
+  22 - 00000065
+  23 - 0000006C
+  24 - 0000006C
+  25 - 0000006F
+  26 - 0000002C
+  27 - 00000020
+  28 - 00000002
+  29 - 00000021
+  30 - 0000000A
+log_excerpt:
+- "1\tFETCH\t0\t2000003F\tUSR"
+- "2\tPHASE\t1\twriteback\t0\tUSR"
+- "3\tFETCH\t63\t0100001F\tUSR"
+- "4\tPHASE\t1\twriteback\t0\tUSR"
+- "5\tFETCH\t64\t01000000\tUSR"
+- "6\tPHASE\t1\twriteback\t0\tUSR"
+- "7\tFETCH\t65\t05000000\tUSR"
+- "8\tPHASE\t1\texecute\t2\tUSR"
+- "9\tPHASE\t2\tmemory\t1\tUSR"
+- "10\tPHASE\t3\twriteback\t0\tUSR"
+- "11\tFETCH\t66\t0100001F\tUSR"
+- "12\tPHASE\t1\twriteback\t0\tUSR"
+- "13\tFETCH\t67\t04000000\tUSR"
+- "14\tPHASE\t1\texecute\t2\tUSR"
+- "15\tPHASE\t2\tmemory\t1\tUSR"
+- "16\tPHASE\t3\twriteback\t0\tUSR"
+- "17\tFETCH\t68\t03000000\tUSR"
+- "18\tPHASE\t1\twriteback\t0\tUSR"
+- "800\tPHASE\t1\twriteback\t0\tUSR"
+- "801\tIRQ_TRAP\t0\tISR"
+- "802\tFETCH\t117\t01000022\tISR"
+- "803\tPHASE\t1\twriteback\t0\tISR"
+- "804\tFETCH\t118\t30000000\tISR"
+- "805\tPHASE\t1\texecute\t1\tISR"
+- "920\tPHASE\t1\texecute\t2\tUSR"
+- "921\tIRQ_TRAP\t0\tISR"
+- "922\tFETCH\t117\t01000022\tISR"
+- "923\tPHASE\t1\twriteback\t0\tISR"
+- "924\tFETCH\t118\t30000000\tISR"
+- "925\tPHASE\t1\texecute\t1\tISR"
+- "1040\tPHASE\t1\twriteback\t0\tUSR"
+- "1041\tIRQ_TRAP\t0\tISR"
+- "1042\tFETCH\t117\t01000022\tISR"
+- "1043\tPHASE\t1\twriteback\t0\tISR"
+- "1044\tFETCH\t118\t30000000\tISR"
+- "1045\tPHASE\t1\texecute\t1\tISR"
+- "1160\tPHASE\t1\texecute\t1\tUSR"
+- "1161\tIRQ_TRAP\t0\tISR"
+- "1162\tFETCH\t117\t01000022\tISR"
+- "1163\tPHASE\t1\twriteback\t0\tISR"
+- "1164\tFETCH\t118\t30000000\tISR"
+- "1165\tPHASE\t1\texecute\t1\tISR"
+- "1280\tPHASE\t1\twriteback\t0\tUSR"
+- "1281\tIRQ_TRAP\t0\tISR"
+- "1282\tFETCH\t117\t01000022\tISR"
+- "1283\tPHASE\t1\twriteback\t0\tISR"
+- "1284\tFETCH\t118\t30000000\tISR"
+- "1285\tPHASE\t1\texecute\t1\tISR"
+- "1400\tPHASE\t2\tmemory\t1\tUSR"
+- "1401\tIRQ_TRAP\t0\tISR"
+- "1402\tFETCH\t117\t01000022\tISR"
+- "1403\tPHASE\t1\twriteback\t0\tISR"
+- "1404\tFETCH\t118\t30000000\tISR"
+- "1405\tPHASE\t1\texecute\t1\tISR"
+- "5015\tFETCH\t49\t20000033\tUSR"
+- "5016\tPHASE\t1\twriteback\t0\tUSR"
+- "5017\tFETCH\t51\t06000000\tUSR"
+- "5018\tPHASE\t1\twriteback\t0\tUSR"
+- "5019\tFETCH\t52\t23000000\tUSR"
+- "5020\tPHASE\t1\texecute\t1\tUSR"
+- "5021\tPHASE\t2\twriteback\t0\tUSR"
+- "5022\tFETCH\t61\t06000000\tUSR"
+- "5023\tPHASE\t1\twriteback\t0\tUSR"
+- "5024\tFETCH\t62\t23000000\tUSR"
+- "5025\tPHASE\t1\texecute\t1\tUSR"
+- "5026\tPHASE\t2\twriteback\t0\tUSR"
+- "5027\tFETCH\t116\t32000000\tUSR"
+- "5027\tPHASE\t1\twriteback\t0\tUSR"

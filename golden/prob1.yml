@@ -1,0 +1,1243 @@
+name: prob1
+source: |
+  ; P = 100001a + 10010b + 1100c = 11.(9091a+910b+100c) => 11|P.
+
+  (defun good_q (q)
+    (if (> q 99) (if (< q 1000) 1 0) 0))
+
+  (defun has_fact (p x)
+    (if (< x 1000)
+        (if (< p (* x x))
+            0
+            (if (eq 0 (mod p x))
+                (progn
+                  (setq q (/ p x))
+                  (if (good_q q)
+                      (if (eq 0 (mod x 11))
+                          1
+                          (if (eq 0 (mod q 11))
+                              1
+                              (has_fact p (+ x 1))))
+                      (has_fact p (+ x 1))))
+                (has_fact p (+ x 1))))
+        0))
+
+  (defun upd (p best)
+    (if (eq 1 (has_fact p 100))
+        (if (> p best) p best)
+        best))
+
+  (defun loop_c6 (a b c best)
+    (if (< c 10)
+        (progn
+          (setq best_c6 (upd (+ (+ (* 100001 a) (* 10010 b)) (* 1100 c)) best))
+          (loop_c6 a b (+ c 1) best_c6))
+        best))
+
+  (defun loop_b6 (a b best)
+    (if (< b 10)
+        (progn
+          (setq best_b6 (loop_c6 a b 0 best))
+          (loop_b6 a (+ b 1) best_b6))
+        best))
+
+  (defun loop_a6 (a best)
+    (if (< a 10)
+        (progn
+          (setq best_a6 (loop_b6 a 0 best))
+          (loop_a6 (+ a 1) best_a6))
+        best))
+
+  (defun out_u32 (w)
+    (progn
+      (out (mod w 256))
+      (setq w (/ w 256))
+      (out (mod w 256))
+      (setq w (/ w 256))
+      (out (mod w 256))
+      (setq w (/ w 256))
+      (out (mod w 256))
+      0))
+
+  (progn
+    (setq ans (loop_a6 1 0))
+    (out_u32 ans)
+    0)
+input: []
+max_ticks: 65000000
+fail_on_max_ticks: true
+output: "q\\xd5\r\\x00"
+code_listing: |
+  0 - 20000153
+  1 - 01000063
+  2 - 01000006
+  3 - 04000000
+  4 - 16000000
+  5 - 2100000F
+  6 - 01000006
+  7 - 04000000
+  8 - 010003E8
+  9 - 16000000
+  10 - 2100000D
+  11 - 01000001
+  12 - 2000000E
+  13 - 01000000
+  14 - 20000010
+  15 - 01000000
+  16 - 06000000
+  17 - 23000000
+  18 - 01000008
+  19 - 04000000
+  20 - 010003E8
+  21 - 16000000
+  22 - 21000070
+  23 - 01000007
+  24 - 04000000
+  25 - 01000008
+  26 - 04000000
+  27 - 01000008
+  28 - 04000000
+  29 - 12000000
+  30 - 16000000
+  31 - 21000022
+  32 - 01000000
+  33 - 2000006F
+  34 - 01000000
+  35 - 01000007
+  36 - 04000000
+  37 - 01000008
+  38 - 04000000
+  39 - 14000000
+  40 - 15000000
+  41 - 21000064
+  42 - 01000000
+  43 - 01000007
+  44 - 04000000
+  45 - 01000008
+  46 - 04000000
+  47 - 13000000
+  48 - 05000000
+  49 - 01000000
+  50 - 04000000
+  51 - 03000000
+  52 - 01000006
+  53 - 01000000
+  54 - 04000000
+  55 - 05000000
+  56 - 22000001
+  57 - 21000058
+  58 - 01000000
+  59 - 01000008
+  60 - 04000000
+  61 - 0100000B
+  62 - 14000000
+  63 - 15000000
+  64 - 21000043
+  65 - 01000001
+  66 - 20000057
+  67 - 01000000
+  68 - 01000000
+  69 - 04000000
+  70 - 0100000B
+  71 - 14000000
+  72 - 15000000
+  73 - 2100004C
+  74 - 01000001
+  75 - 20000057
+  76 - 01000007
+  77 - 01000007
+  78 - 04000000
+  79 - 05000000
+  80 - 01000008
+  81 - 01000008
+  82 - 04000000
+  83 - 01000001
+  84 - 10000000
+  85 - 05000000
+  86 - 22000012
+  87 - 20000063
+  88 - 01000007
+  89 - 01000007
+  90 - 04000000
+  91 - 05000000
+  92 - 01000008
+  93 - 01000008
+  94 - 04000000
+  95 - 01000001
+  96 - 10000000
+  97 - 05000000
+  98 - 22000012
+  99 - 2000006F
+  100 - 01000007
+  101 - 01000007
+  102 - 04000000
+  103 - 05000000
+  104 - 01000008
+  105 - 01000008
+  106 - 04000000
+  107 - 01000001
+  108 - 10000000
+  109 - 05000000
+  110 - 22000012
+  111 - 20000071
+  112 - 01000000
+  113 - 06000000
+  114 - 23000000
+  115 - 01000001
+  116 - 01000007
+  117 - 01000009
+  118 - 04000000
+  119 - 05000000
+  120 - 01000008
+  121 - 01000064
+  122 - 05000000
+  123 - 22000012
+  124 - 15000000
+  125 - 2100008A
+  126 - 0100000A
+  127 - 04000000
+  128 - 01000009
+  129 - 04000000
+  130 - 16000000
+  131 - 21000087
+  132 - 01000009
+  133 - 04000000
+  134 - 20000089
+  135 - 0100000A
+  136 - 04000000
+  137 - 2000008C
+  138 - 0100000A
+  139 - 04000000
+  140 - 06000000
+  141 - 23000000
+  142 - 0100000D
+  143 - 04000000
+  144 - 0100000A
+  145 - 16000000
+  146 - 210000C1
+  147 - 01000001
+  148 - 01000009
+  149 - 010186A1
+  150 - 0100000B
+  151 - 04000000
+  152 - 12000000
+  153 - 0100271A
+  154 - 0100000C
+  155 - 04000000
+  156 - 12000000
+  157 - 10000000
+  158 - 0100044C
+  159 - 0100000D
+  160 - 04000000
+  161 - 12000000
+  162 - 10000000
+  163 - 05000000
+  164 - 0100000A
+  165 - 0100000E
+  166 - 04000000
+  167 - 05000000
+  168 - 22000073
+  169 - 05000000
+  170 - 01000001
+  171 - 04000000
+  172 - 03000000
+  173 - 0100000B
+  174 - 0100000B
+  175 - 04000000
+  176 - 05000000
+  177 - 0100000C
+  178 - 0100000C
+  179 - 04000000
+  180 - 05000000
+  181 - 0100000D
+  182 - 0100000D
+  183 - 04000000
+  184 - 01000001
+  185 - 10000000
+  186 - 05000000
+  187 - 0100000E
+  188 - 01000001
+  189 - 04000000
+  190 - 05000000
+  191 - 2200008E
+  192 - 200000C3
+  193 - 0100000E
+  194 - 04000000
+  195 - 06000000
+  196 - 23000000
+  197 - 01000010
+  198 - 04000000
+  199 - 0100000A
+  200 - 16000000
+  201 - 210000EF
+  202 - 01000002
+  203 - 0100000B
+  204 - 0100000F
+  205 - 04000000
+  206 - 05000000
+  207 - 0100000C
+  208 - 01000010
+  209 - 04000000
+  210 - 05000000
+  211 - 0100000D
+  212 - 01000000
+  213 - 05000000
+  214 - 0100000E
+  215 - 01000011
+  216 - 04000000
+  217 - 05000000
+  218 - 2200008E
+  219 - 05000000
+  220 - 01000002
+  221 - 04000000
+  222 - 03000000
+  223 - 0100000F
+  224 - 0100000F
+  225 - 04000000
+  226 - 05000000
+  227 - 01000010
+  228 - 01000010
+  229 - 04000000
+  230 - 01000001
+  231 - 10000000
+  232 - 05000000
+  233 - 01000011
+  234 - 01000002
+  235 - 04000000
+  236 - 05000000
+  237 - 220000C5
+  238 - 200000F1
+  239 - 01000011
+  240 - 04000000
+  241 - 06000000
+  242 - 23000000
+  243 - 01000012
+  244 - 04000000
+  245 - 0100000A
+  246 - 16000000
+  247 - 21000115
+  248 - 01000003
+  249 - 0100000F
+  250 - 01000012
+  251 - 04000000
+  252 - 05000000
+  253 - 01000010
+  254 - 01000000
+  255 - 05000000
+  256 - 01000011
+  257 - 01000013
+  258 - 04000000
+  259 - 05000000
+  260 - 220000C5
+  261 - 05000000
+  262 - 01000003
+  263 - 04000000
+  264 - 03000000
+  265 - 01000012
+  266 - 01000012
+  267 - 04000000
+  268 - 01000001
+  269 - 10000000
+  270 - 05000000
+  271 - 01000013
+  272 - 01000003
+  273 - 04000000
+  274 - 05000000
+  275 - 220000F3
+  276 - 20000117
+  277 - 01000013
+  278 - 04000000
+  279 - 06000000
+  280 - 23000000
+  281 - 01000014
+  282 - 04000000
+  283 - 01000100
+  284 - 14000000
+  285 - 02000000
+  286 - 31000001
+  287 - 03000000
+  288 - 01000014
+  289 - 01000014
+  290 - 04000000
+  291 - 01000100
+  292 - 13000000
+  293 - 05000000
+  294 - 01000014
+  295 - 04000000
+  296 - 03000000
+  297 - 01000014
+  298 - 04000000
+  299 - 01000100
+  300 - 14000000
+  301 - 02000000
+  302 - 31000001
+  303 - 03000000
+  304 - 01000014
+  305 - 01000014
+  306 - 04000000
+  307 - 01000100
+  308 - 13000000
+  309 - 05000000
+  310 - 01000014
+  311 - 04000000
+  312 - 03000000
+  313 - 01000014
+  314 - 04000000
+  315 - 01000100
+  316 - 14000000
+  317 - 02000000
+  318 - 31000001
+  319 - 03000000
+  320 - 01000014
+  321 - 01000014
+  322 - 04000000
+  323 - 01000100
+  324 - 13000000
+  325 - 05000000
+  326 - 01000014
+  327 - 04000000
+  328 - 03000000
+  329 - 01000014
+  330 - 04000000
+  331 - 01000100
+  332 - 14000000
+  333 - 02000000
+  334 - 31000001
+  335 - 03000000
+  336 - 01000000
+  337 - 06000000
+  338 - 23000000
+  339 - 01000005
+  340 - 01000012
+  341 - 01000001
+  342 - 05000000
+  343 - 01000013
+  344 - 01000000
+  345 - 05000000
+  346 - 220000F3
+  347 - 05000000
+  348 - 01000005
+  349 - 04000000
+  350 - 03000000
+  351 - 01000014
+  352 - 01000005
+  353 - 04000000
+  354 - 05000000
+  355 - 22000119
+  356 - 03000000
+  357 - 01000000
+  358 - 32000000
+data_listing: ''
+log_excerpt:
+- "1\tFETCH\t0\t20000153\tUSR"
+- "2\tPHASE\t1\twriteback\t0\tUSR"
+- "3\tFETCH\t339\t01000005\tUSR"
+- "4\tPHASE\t1\twriteback\t0\tUSR"
+- "5\tFETCH\t340\t01000012\tUSR"
+- "6\tPHASE\t1\twriteback\t0\tUSR"
+- "7\tFETCH\t341\t01000001\tUSR"
+- "8\tPHASE\t1\twriteback\t0\tUSR"
+- "9\tFETCH\t342\t05000000\tUSR"
+- "10\tPHASE\t1\texecute\t2\tUSR"
+- "11\tPHASE\t2\tmemory\t1\tUSR"
+- "12\tPHASE\t3\twriteback\t0\tUSR"
+- "13\tFETCH\t343\t01000013\tUSR"
+- "14\tPHASE\t1\twriteback\t0\tUSR"
+- "15\tFETCH\t344\t01000000\tUSR"
+- "16\tPHASE\t1\twriteback\t0\tUSR"
+- "17\tFETCH\t345\t05000000\tUSR"
+- "18\tPHASE\t1\texecute\t2\tUSR"
+- "19\tPHASE\t2\tmemory\t1\tUSR"
+- "20\tPHASE\t3\twriteback\t0\tUSR"
+- "21\tFETCH\t346\t220000F3\tUSR"
+- "22\tPHASE\t1\texecute\t1\tUSR"
+- "23\tPHASE\t2\twriteback\t0\tUSR"
+- "24\tFETCH\t243\t01000012\tUSR"
+- "25\tPHASE\t1\twriteback\t0\tUSR"
+- "26\tFETCH\t244\t04000000\tUSR"
+- "27\tPHASE\t1\texecute\t2\tUSR"
+- "28\tPHASE\t2\tmemory\t1\tUSR"
+- "29\tPHASE\t3\twriteback\t0\tUSR"
+- "30\tFETCH\t245\t0100000A\tUSR"
+- "31\tPHASE\t1\twriteback\t0\tUSR"
+- "32\tFETCH\t246\t16000000\tUSR"
+- "33\tPHASE\t1\texecute\t1\tUSR"
+- "34\tPHASE\t2\twriteback\t0\tUSR"
+- "35\tFETCH\t247\t21000115\tUSR"
+- "36\tPHASE\t1\texecute\t2\tUSR"
+- "37\tPHASE\t2\tbranch\t1\tUSR"
+- "38\tPHASE\t3\twriteback\t0\tUSR"
+- "39\tFETCH\t248\t01000003\tUSR"
+- "40\tPHASE\t1\twriteback\t0\tUSR"
+- "41\tFETCH\t249\t0100000F\tUSR"
+- "42\tPHASE\t1\twriteback\t0\tUSR"
+- "43\tFETCH\t250\t01000012\tUSR"
+- "44\tPHASE\t1\twriteback\t0\tUSR"
+- "45\tFETCH\t251\t04000000\tUSR"
+- "46\tPHASE\t1\texecute\t2\tUSR"
+- "47\tPHASE\t2\tmemory\t1\tUSR"
+- "48\tPHASE\t3\twriteback\t0\tUSR"
+- "49\tFETCH\t252\t05000000\tUSR"
+- "50\tPHASE\t1\texecute\t2\tUSR"
+- "51\tPHASE\t2\tmemory\t1\tUSR"
+- "52\tPHASE\t3\twriteback\t0\tUSR"
+- "53\tFETCH\t253\t01000010\tUSR"
+- "54\tPHASE\t1\twriteback\t0\tUSR"
+- "55\tFETCH\t254\t01000000\tUSR"
+- "56\tPHASE\t1\twriteback\t0\tUSR"
+- "57\tFETCH\t255\t05000000\tUSR"
+- "58\tPHASE\t1\texecute\t2\tUSR"
+- "59\tPHASE\t2\tmemory\t1\tUSR"
+- "60\tPHASE\t3\twriteback\t0\tUSR"
+- "61\tFETCH\t256\t01000011\tUSR"
+- "62\tPHASE\t1\twriteback\t0\tUSR"
+- "63\tFETCH\t257\t01000013\tUSR"
+- "64\tPHASE\t1\twriteback\t0\tUSR"
+- "65\tFETCH\t258\t04000000\tUSR"
+- "66\tPHASE\t1\texecute\t2\tUSR"
+- "67\tPHASE\t2\tmemory\t1\tUSR"
+- "68\tPHASE\t3\twriteback\t0\tUSR"
+- "69\tFETCH\t259\t05000000\tUSR"
+- "70\tPHASE\t1\texecute\t2\tUSR"
+- "71\tPHASE\t2\tmemory\t1\tUSR"
+- "72\tPHASE\t3\twriteback\t0\tUSR"
+- "73\tFETCH\t260\t220000C5\tUSR"
+- "74\tPHASE\t1\texecute\t1\tUSR"
+- "75\tPHASE\t2\twriteback\t0\tUSR"
+- "76\tFETCH\t197\t01000010\tUSR"
+- "77\tPHASE\t1\twriteback\t0\tUSR"
+- "78\tFETCH\t198\t04000000\tUSR"
+- "79\tPHASE\t1\texecute\t2\tUSR"
+- "80\tPHASE\t2\tmemory\t1\tUSR"
+- "81\tPHASE\t3\twriteback\t0\tUSR"
+- "82\tFETCH\t199\t0100000A\tUSR"
+- "83\tPHASE\t1\twriteback\t0\tUSR"
+- "84\tFETCH\t200\t16000000\tUSR"
+- "85\tPHASE\t1\texecute\t1\tUSR"
+- "86\tPHASE\t2\twriteback\t0\tUSR"
+- "87\tFETCH\t201\t210000EF\tUSR"
+- "88\tPHASE\t1\texecute\t2\tUSR"
+- "89\tPHASE\t2\tbranch\t1\tUSR"
+- "90\tPHASE\t3\twriteback\t0\tUSR"
+- "91\tFETCH\t202\t01000002\tUSR"
+- "92\tPHASE\t1\twriteback\t0\tUSR"
+- "93\tFETCH\t203\t0100000B\tUSR"
+- "94\tPHASE\t1\twriteback\t0\tUSR"
+- "95\tFETCH\t204\t0100000F\tUSR"
+- "96\tPHASE\t1\twriteback\t0\tUSR"
+- "97\tFETCH\t205\t04000000\tUSR"
+- "98\tPHASE\t1\texecute\t2\tUSR"
+- "99\tPHASE\t2\tmemory\t1\tUSR"
+- "100\tPHASE\t3\twriteback\t0\tUSR"
+- "101\tFETCH\t206\t05000000\tUSR"
+- "102\tPHASE\t1\texecute\t2\tUSR"
+- "103\tPHASE\t2\tmemory\t1\tUSR"
+- "104\tPHASE\t3\twriteback\t0\tUSR"
+- "105\tFETCH\t207\t0100000C\tUSR"
+- "106\tPHASE\t1\twriteback\t0\tUSR"
+- "107\tFETCH\t208\t01000010\tUSR"
+- "108\tPHASE\t1\twriteback\t0\tUSR"
+- "109\tFETCH\t209\t04000000\tUSR"
+- "110\tPHASE\t1\texecute\t2\tUSR"
+- "111\tPHASE\t2\tmemory\t1\tUSR"
+- "112\tPHASE\t3\twriteback\t0\tUSR"
+- "113\tFETCH\t210\t05000000\tUSR"
+- "114\tPHASE\t1\texecute\t2\tUSR"
+- "115\tPHASE\t2\tmemory\t1\tUSR"
+- "116\tPHASE\t3\twriteback\t0\tUSR"
+- "117\tFETCH\t211\t0100000D\tUSR"
+- "118\tPHASE\t1\twriteback\t0\tUSR"
+- "119\tFETCH\t212\t01000000\tUSR"
+- "120\tPHASE\t1\twriteback\t0\tUSR"
+- "121\tFETCH\t213\t05000000\tUSR"
+- "122\tPHASE\t1\texecute\t2\tUSR"
+- "123\tPHASE\t2\tmemory\t1\tUSR"
+- "124\tPHASE\t3\twriteback\t0\tUSR"
+- "125\tFETCH\t214\t0100000E\tUSR"
+- "126\tPHASE\t1\twriteback\t0\tUSR"
+- "127\tFETCH\t215\t01000011\tUSR"
+- "128\tPHASE\t1\twriteback\t0\tUSR"
+- "129\tFETCH\t216\t04000000\tUSR"
+- "130\tPHASE\t1\texecute\t2\tUSR"
+- "131\tPHASE\t2\tmemory\t1\tUSR"
+- "132\tPHASE\t3\twriteback\t0\tUSR"
+- "133\tFETCH\t217\t05000000\tUSR"
+- "134\tPHASE\t1\texecute\t2\tUSR"
+- "135\tPHASE\t2\tmemory\t1\tUSR"
+- "136\tPHASE\t3\twriteback\t0\tUSR"
+- "137\tFETCH\t218\t2200008E\tUSR"
+- "138\tPHASE\t1\texecute\t1\tUSR"
+- "139\tPHASE\t2\twriteback\t0\tUSR"
+- "140\tFETCH\t142\t0100000D\tUSR"
+- "141\tPHASE\t1\twriteback\t0\tUSR"
+- "142\tFETCH\t143\t04000000\tUSR"
+- "143\tPHASE\t1\texecute\t2\tUSR"
+- "144\tPHASE\t2\tmemory\t1\tUSR"
+- "145\tPHASE\t3\twriteback\t0\tUSR"
+- "146\tFETCH\t144\t0100000A\tUSR"
+- "147\tPHASE\t1\twriteback\t0\tUSR"
+- "148\tFETCH\t145\t16000000\tUSR"
+- "149\tPHASE\t1\texecute\t1\tUSR"
+- "150\tPHASE\t2\twriteback\t0\tUSR"
+- "151\tFETCH\t146\t210000C1\tUSR"
+- "152\tPHASE\t1\texecute\t2\tUSR"
+- "153\tPHASE\t2\tbranch\t1\tUSR"
+- "154\tPHASE\t3\twriteback\t0\tUSR"
+- "155\tFETCH\t147\t01000001\tUSR"
+- "156\tPHASE\t1\twriteback\t0\tUSR"
+- "157\tFETCH\t148\t01000009\tUSR"
+- "158\tPHASE\t1\twriteback\t0\tUSR"
+- "159\tFETCH\t149\t010186A1\tUSR"
+- "160\tPHASE\t1\twriteback\t0\tUSR"
+- "161\tFETCH\t150\t0100000B\tUSR"
+- "162\tPHASE\t1\twriteback\t0\tUSR"
+- "163\tFETCH\t151\t04000000\tUSR"
+- "164\tPHASE\t1\texecute\t2\tUSR"
+- "165\tPHASE\t2\tmemory\t1\tUSR"
+- "166\tPHASE\t3\twriteback\t0\tUSR"
+- "167\tFETCH\t152\t12000000\tUSR"
+- "168\tPHASE\t1\texecute\t2\tUSR"
+- "169\tPHASE\t2\tmul\t1\tUSR"
+- "170\tPHASE\t3\twriteback\t0\tUSR"
+- "171\tFETCH\t153\t0100271A\tUSR"
+- "172\tPHASE\t1\twriteback\t0\tUSR"
+- "173\tFETCH\t154\t0100000C\tUSR"
+- "174\tPHASE\t1\twriteback\t0\tUSR"
+- "175\tFETCH\t155\t04000000\tUSR"
+- "176\tPHASE\t1\texecute\t2\tUSR"
+- "177\tPHASE\t2\tmemory\t1\tUSR"
+- "178\tPHASE\t3\twriteback\t0\tUSR"
+- "179\tFETCH\t156\t12000000\tUSR"
+- "180\tPHASE\t1\texecute\t2\tUSR"
+- "181\tPHASE\t2\tmul\t1\tUSR"
+- "182\tPHASE\t3\twriteback\t0\tUSR"
+- "183\tFETCH\t157\t10000000\tUSR"
+- "184\tPHASE\t1\texecute\t1\tUSR"
+- "185\tPHASE\t2\twriteback\t0\tUSR"
+- "186\tFETCH\t158\t0100044C\tUSR"
+- "187\tPHASE\t1\twriteback\t0\tUSR"
+- "188\tFETCH\t159\t0100000D\tUSR"
+- "189\tPHASE\t1\twriteback\t0\tUSR"
+- "190\tFETCH\t160\t04000000\tUSR"
+- "191\tPHASE\t1\texecute\t2\tUSR"
+- "192\tPHASE\t2\tmemory\t1\tUSR"
+- "193\tPHASE\t3\twriteback\t0\tUSR"
+- "194\tFETCH\t161\t12000000\tUSR"
+- "195\tPHASE\t1\texecute\t2\tUSR"
+- "196\tPHASE\t2\tmul\t1\tUSR"
+- "197\tPHASE\t3\twriteback\t0\tUSR"
+- "198\tFETCH\t162\t10000000\tUSR"
+- "199\tPHASE\t1\texecute\t1\tUSR"
+- "200\tPHASE\t2\twriteback\t0\tUSR"
+- "201\tFETCH\t163\t05000000\tUSR"
+- "202\tPHASE\t1\texecute\t2\tUSR"
+- "203\tPHASE\t2\tmemory\t1\tUSR"
+- "204\tPHASE\t3\twriteback\t0\tUSR"
+- "205\tFETCH\t164\t0100000A\tUSR"
+- "206\tPHASE\t1\twriteback\t0\tUSR"
+- "207\tFETCH\t165\t0100000E\tUSR"
+- "208\tPHASE\t1\twriteback\t0\tUSR"
+- "209\tFETCH\t166\t04000000\tUSR"
+- "210\tPHASE\t1\texecute\t2\tUSR"
+- "211\tPHASE\t2\tmemory\t1\tUSR"
+- "212\tPHASE\t3\twriteback\t0\tUSR"
+- "213\tFETCH\t167\t05000000\tUSR"
+- "214\tPHASE\t1\texecute\t2\tUSR"
+- "215\tPHASE\t2\tmemory\t1\tUSR"
+- "216\tPHASE\t3\twriteback\t0\tUSR"
+- "217\tFETCH\t168\t22000073\tUSR"
+- "218\tPHASE\t1\texecute\t1\tUSR"
+- "219\tPHASE\t2\twriteback\t0\tUSR"
+- "220\tFETCH\t115\t01000001\tUSR"
+- "221\tPHASE\t1\twriteback\t0\tUSR"
+- "222\tFETCH\t116\t01000007\tUSR"
+- "223\tPHASE\t1\twriteback\t0\tUSR"
+- "224\tFETCH\t117\t01000009\tUSR"
+- "225\tPHASE\t1\twriteback\t0\tUSR"
+- "226\tFETCH\t118\t04000000\tUSR"
+- "227\tPHASE\t1\texecute\t2\tUSR"
+- "228\tPHASE\t2\tmemory\t1\tUSR"
+- "229\tPHASE\t3\twriteback\t0\tUSR"
+- "230\tFETCH\t119\t05000000\tUSR"
+- "231\tPHASE\t1\texecute\t2\tUSR"
+- "232\tPHASE\t2\tmemory\t1\tUSR"
+- "233\tPHASE\t3\twriteback\t0\tUSR"
+- "234\tFETCH\t120\t01000008\tUSR"
+- "235\tPHASE\t1\twriteback\t0\tUSR"
+- "236\tFETCH\t121\t01000064\tUSR"
+- "237\tPHASE\t1\twriteback\t0\tUSR"
+- "238\tFETCH\t122\t05000000\tUSR"
+- "239\tPHASE\t1\texecute\t2\tUSR"
+- "240\tPHASE\t2\tmemory\t1\tUSR"
+- "241\tPHASE\t3\twriteback\t0\tUSR"
+- "242\tFETCH\t123\t22000012\tUSR"
+- "243\tPHASE\t1\texecute\t1\tUSR"
+- "244\tPHASE\t2\twriteback\t0\tUSR"
+- "245\tFETCH\t18\t01000008\tUSR"
+- "246\tPHASE\t1\twriteback\t0\tUSR"
+- "247\tFETCH\t19\t04000000\tUSR"
+- "248\tPHASE\t1\texecute\t2\tUSR"
+- "249\tPHASE\t2\tmemory\t1\tUSR"
+- "250\tPHASE\t3\twriteback\t0\tUSR"
+- "251\tFETCH\t20\t010003E8\tUSR"
+- "252\tPHASE\t1\twriteback\t0\tUSR"
+- "253\tFETCH\t21\t16000000\tUSR"
+- "254\tPHASE\t1\texecute\t1\tUSR"
+- "255\tPHASE\t2\twriteback\t0\tUSR"
+- "256\tFETCH\t22\t21000070\tUSR"
+- "257\tPHASE\t1\texecute\t2\tUSR"
+- "258\tPHASE\t2\tbranch\t1\tUSR"
+- "259\tPHASE\t3\twriteback\t0\tUSR"
+- "260\tFETCH\t23\t01000007\tUSR"
+- "261\tPHASE\t1\twriteback\t0\tUSR"
+- "262\tFETCH\t24\t04000000\tUSR"
+- "263\tPHASE\t1\texecute\t2\tUSR"
+- "264\tPHASE\t2\tmemory\t1\tUSR"
+- "265\tPHASE\t3\twriteback\t0\tUSR"
+- "266\tFETCH\t25\t01000008\tUSR"
+- "267\tPHASE\t1\twriteback\t0\tUSR"
+- "268\tFETCH\t26\t04000000\tUSR"
+- "269\tPHASE\t1\texecute\t2\tUSR"
+- "270\tPHASE\t2\tmemory\t1\tUSR"
+- "271\tPHASE\t3\twriteback\t0\tUSR"
+- "272\tFETCH\t27\t01000008\tUSR"
+- "273\tPHASE\t1\twriteback\t0\tUSR"
+- "274\tFETCH\t28\t04000000\tUSR"
+- "275\tPHASE\t1\texecute\t2\tUSR"
+- "276\tPHASE\t2\tmemory\t1\tUSR"
+- "277\tPHASE\t3\twriteback\t0\tUSR"
+- "278\tFETCH\t29\t12000000\tUSR"
+- "279\tPHASE\t1\texecute\t2\tUSR"
+- "280\tPHASE\t2\tmul\t1\tUSR"
+- "281\tPHASE\t3\twriteback\t0\tUSR"
+- "282\tFETCH\t30\t16000000\tUSR"
+- "283\tPHASE\t1\texecute\t1\tUSR"
+- "284\tPHASE\t2\twriteback\t0\tUSR"
+- "285\tFETCH\t31\t21000022\tUSR"
+- "286\tPHASE\t1\texecute\t2\tUSR"
+- "287\tPHASE\t2\tbranch\t1\tUSR"
+- "288\tPHASE\t3\twriteback\t0\tUSR"
+- "289\tFETCH\t34\t01000000\tUSR"
+- "290\tPHASE\t1\twriteback\t0\tUSR"
+- "291\tFETCH\t35\t01000007\tUSR"
+- "292\tPHASE\t1\twriteback\t0\tUSR"
+- "293\tFETCH\t36\t04000000\tUSR"
+- "294\tPHASE\t1\texecute\t2\tUSR"
+- "295\tPHASE\t2\tmemory\t1\tUSR"
+- "296\tPHASE\t3\twriteback\t0\tUSR"
+- "297\tFETCH\t37\t01000008\tUSR"
+- "298\tPHASE\t1\twriteback\t0\tUSR"
+- "299\tFETCH\t38\t04000000\tUSR"
+- "300\tPHASE\t1\texecute\t2\tUSR"
+- "301\tPHASE\t2\tmemory\t1\tUSR"
+- "302\tPHASE\t3\twriteback\t0\tUSR"
+- "303\tFETCH\t39\t14000000\tUSR"
+- "304\tPHASE\t1\texecute\t2\tUSR"
+- "305\tPHASE\t2\tdiv\t1\tUSR"
+- "306\tPHASE\t3\twriteback\t0\tUSR"
+- "307\tFETCH\t40\t15000000\tUSR"
+- "308\tPHASE\t1\texecute\t1\tUSR"
+- "309\tPHASE\t2\twriteback\t0\tUSR"
+- "310\tFETCH\t41\t21000064\tUSR"
+- "311\tPHASE\t1\texecute\t2\tUSR"
+- "312\tPHASE\t2\tbranch\t1\tUSR"
+- "313\tPHASE\t3\twriteback\t0\tUSR"
+- "314\tFETCH\t100\t01000007\tUSR"
+- "315\tPHASE\t1\twriteback\t0\tUSR"
+- "316\tFETCH\t101\t01000007\tUSR"
+- "317\tPHASE\t1\twriteback\t0\tUSR"
+- "318\tFETCH\t102\t04000000\tUSR"
+- "319\tPHASE\t1\texecute\t2\tUSR"
+- "320\tPHASE\t2\tmemory\t1\tUSR"
+- "321\tPHASE\t3\twriteback\t0\tUSR"
+- "322\tFETCH\t103\t05000000\tUSR"
+- "323\tPHASE\t1\texecute\t2\tUSR"
+- "324\tPHASE\t2\tmemory\t1\tUSR"
+- "325\tPHASE\t3\twriteback\t0\tUSR"
+- "326\tFETCH\t104\t01000008\tUSR"
+- "327\tPHASE\t1\twriteback\t0\tUSR"
+- "328\tFETCH\t105\t01000008\tUSR"
+- "329\tPHASE\t1\twriteback\t0\tUSR"
+- "330\tFETCH\t106\t04000000\tUSR"
+- "331\tPHASE\t1\texecute\t2\tUSR"
+- "332\tPHASE\t2\tmemory\t1\tUSR"
+- "333\tPHASE\t3\twriteback\t0\tUSR"
+- "334\tFETCH\t107\t01000001\tUSR"
+- "335\tPHASE\t1\twriteback\t0\tUSR"
+- "336\tFETCH\t108\t10000000\tUSR"
+- "337\tPHASE\t1\texecute\t1\tUSR"
+- "338\tPHASE\t2\twriteback\t0\tUSR"
+- "339\tFETCH\t109\t05000000\tUSR"
+- "340\tPHASE\t1\texecute\t2\tUSR"
+- "341\tPHASE\t2\tmemory\t1\tUSR"
+- "342\tPHASE\t3\twriteback\t0\tUSR"
+- "343\tFETCH\t110\t22000012\tUSR"
+- "344\tPHASE\t1\texecute\t1\tUSR"
+- "345\tPHASE\t2\twriteback\t0\tUSR"
+- "346\tFETCH\t18\t01000008\tUSR"
+- "347\tPHASE\t1\twriteback\t0\tUSR"
+- "348\tFETCH\t19\t04000000\tUSR"
+- "349\tPHASE\t1\texecute\t2\tUSR"
+- "350\tPHASE\t2\tmemory\t1\tUSR"
+- "351\tPHASE\t3\twriteback\t0\tUSR"
+- "352\tFETCH\t20\t010003E8\tUSR"
+- "353\tPHASE\t1\twriteback\t0\tUSR"
+- "354\tFETCH\t21\t16000000\tUSR"
+- "355\tPHASE\t1\texecute\t1\tUSR"
+- "356\tPHASE\t2\twriteback\t0\tUSR"
+- "357\tFETCH\t22\t21000070\tUSR"
+- "358\tPHASE\t1\texecute\t2\tUSR"
+- "359\tPHASE\t2\tbranch\t1\tUSR"
+- "360\tPHASE\t3\twriteback\t0\tUSR"
+- "361\tFETCH\t23\t01000007\tUSR"
+- "362\tPHASE\t1\twriteback\t0\tUSR"
+- "363\tFETCH\t24\t04000000\tUSR"
+- "364\tPHASE\t1\texecute\t2\tUSR"
+- "365\tPHASE\t2\tmemory\t1\tUSR"
+- "366\tPHASE\t3\twriteback\t0\tUSR"
+- "367\tFETCH\t25\t01000008\tUSR"
+- "368\tPHASE\t1\twriteback\t0\tUSR"
+- "369\tFETCH\t26\t04000000\tUSR"
+- "370\tPHASE\t1\texecute\t2\tUSR"
+- "371\tPHASE\t2\tmemory\t1\tUSR"
+- "372\tPHASE\t3\twriteback\t0\tUSR"
+- "373\tFETCH\t27\t01000008\tUSR"
+- "374\tPHASE\t1\twriteback\t0\tUSR"
+- "375\tFETCH\t28\t04000000\tUSR"
+- "376\tPHASE\t1\texecute\t2\tUSR"
+- "377\tPHASE\t2\tmemory\t1\tUSR"
+- "378\tPHASE\t3\twriteback\t0\tUSR"
+- "379\tFETCH\t29\t12000000\tUSR"
+- "380\tPHASE\t1\texecute\t2\tUSR"
+- "381\tPHASE\t2\tmul\t1\tUSR"
+- "382\tPHASE\t3\twriteback\t0\tUSR"
+- "383\tFETCH\t30\t16000000\tUSR"
+- "384\tPHASE\t1\texecute\t1\tUSR"
+- "385\tPHASE\t2\twriteback\t0\tUSR"
+- "386\tFETCH\t31\t21000022\tUSR"
+- "387\tPHASE\t1\texecute\t2\tUSR"
+- "388\tPHASE\t2\tbranch\t1\tUSR"
+- "389\tPHASE\t3\twriteback\t0\tUSR"
+- "390\tFETCH\t34\t01000000\tUSR"
+- "391\tPHASE\t1\twriteback\t0\tUSR"
+- "392\tFETCH\t35\t01000007\tUSR"
+- "393\tPHASE\t1\twriteback\t0\tUSR"
+- "394\tFETCH\t36\t04000000\tUSR"
+- "395\tPHASE\t1\texecute\t2\tUSR"
+- "396\tPHASE\t2\tmemory\t1\tUSR"
+- "397\tPHASE\t3\twriteback\t0\tUSR"
+- "398\tFETCH\t37\t01000008\tUSR"
+- "399\tPHASE\t1\twriteback\t0\tUSR"
+- "400\tFETCH\t38\t04000000\tUSR"
+- "401\tPHASE\t1\texecute\t2\tUSR"
+- "402\tPHASE\t2\tmemory\t1\tUSR"
+- "403\tPHASE\t3\twriteback\t0\tUSR"
+- "404\tFETCH\t39\t14000000\tUSR"
+- "405\tPHASE\t1\texecute\t2\tUSR"
+- "406\tPHASE\t2\tdiv\t1\tUSR"
+- "407\tPHASE\t3\twriteback\t0\tUSR"
+- "408\tFETCH\t40\t15000000\tUSR"
+- "409\tPHASE\t1\texecute\t1\tUSR"
+- "410\tPHASE\t2\twriteback\t0\tUSR"
+- "411\tFETCH\t41\t21000064\tUSR"
+- "412\tPHASE\t1\texecute\t2\tUSR"
+- "413\tPHASE\t2\tbranch\t1\tUSR"
+- "414\tPHASE\t3\twriteback\t0\tUSR"
+- "415\tFETCH\t100\t01000007\tUSR"
+- "416\tPHASE\t1\twriteback\t0\tUSR"
+- "417\tFETCH\t101\t01000007\tUSR"
+- "418\tPHASE\t1\twriteback\t0\tUSR"
+- "419\tFETCH\t102\t04000000\tUSR"
+- "420\tPHASE\t1\texecute\t2\tUSR"
+- "421\tPHASE\t2\tmemory\t1\tUSR"
+- "422\tPHASE\t3\twriteback\t0\tUSR"
+- "423\tFETCH\t103\t05000000\tUSR"
+- "424\tPHASE\t1\texecute\t2\tUSR"
+- "425\tPHASE\t2\tmemory\t1\tUSR"
+- "426\tPHASE\t3\twriteback\t0\tUSR"
+- "427\tFETCH\t104\t01000008\tUSR"
+- "428\tPHASE\t1\twriteback\t0\tUSR"
+- "429\tFETCH\t105\t01000008\tUSR"
+- "430\tPHASE\t1\twriteback\t0\tUSR"
+- "431\tFETCH\t106\t04000000\tUSR"
+- "432\tPHASE\t1\texecute\t2\tUSR"
+- "433\tPHASE\t2\tmemory\t1\tUSR"
+- "434\tPHASE\t3\twriteback\t0\tUSR"
+- "435\tFETCH\t107\t01000001\tUSR"
+- "436\tPHASE\t1\twriteback\t0\tUSR"
+- "437\tFETCH\t108\t10000000\tUSR"
+- "438\tPHASE\t1\texecute\t1\tUSR"
+- "439\tPHASE\t2\twriteback\t0\tUSR"
+- "440\tFETCH\t109\t05000000\tUSR"
+- "441\tPHASE\t1\texecute\t2\tUSR"
+- "442\tPHASE\t2\tmemory\t1\tUSR"
+- "443\tPHASE\t3\twriteback\t0\tUSR"
+- "444\tFETCH\t110\t22000012\tUSR"
+- "445\tPHASE\t1\texecute\t1\tUSR"
+- "446\tPHASE\t2\twriteback\t0\tUSR"
+- "447\tFETCH\t18\t01000008\tUSR"
+- "448\tPHASE\t1\twriteback\t0\tUSR"
+- "449\tFETCH\t19\t04000000\tUSR"
+- "450\tPHASE\t1\texecute\t2\tUSR"
+- "451\tPHASE\t2\tmemory\t1\tUSR"
+- "452\tPHASE\t3\twriteback\t0\tUSR"
+- "453\tFETCH\t20\t010003E8\tUSR"
+- "454\tPHASE\t1\twriteback\t0\tUSR"
+- "455\tFETCH\t21\t16000000\tUSR"
+- "456\tPHASE\t1\texecute\t1\tUSR"
+- "457\tPHASE\t2\twriteback\t0\tUSR"
+- "458\tFETCH\t22\t21000070\tUSR"
+- "459\tPHASE\t1\texecute\t2\tUSR"
+- "460\tPHASE\t2\tbranch\t1\tUSR"
+- "461\tPHASE\t3\twriteback\t0\tUSR"
+- "462\tFETCH\t23\t01000007\tUSR"
+- "463\tPHASE\t1\twriteback\t0\tUSR"
+- "464\tFETCH\t24\t04000000\tUSR"
+- "465\tPHASE\t1\texecute\t2\tUSR"
+- "466\tPHASE\t2\tmemory\t1\tUSR"
+- "467\tPHASE\t3\twriteback\t0\tUSR"
+- "468\tFETCH\t25\t01000008\tUSR"
+- "469\tPHASE\t1\twriteback\t0\tUSR"
+- "470\tFETCH\t26\t04000000\tUSR"
+- "471\tPHASE\t1\texecute\t2\tUSR"
+- "472\tPHASE\t2\tmemory\t1\tUSR"
+- "473\tPHASE\t3\twriteback\t0\tUSR"
+- "474\tFETCH\t27\t01000008\tUSR"
+- "475\tPHASE\t1\twriteback\t0\tUSR"
+- "476\tFETCH\t28\t04000000\tUSR"
+- "477\tPHASE\t1\texecute\t2\tUSR"
+- "478\tPHASE\t2\tmemory\t1\tUSR"
+- "479\tPHASE\t3\twriteback\t0\tUSR"
+- "480\tFETCH\t29\t12000000\tUSR"
+- "481\tPHASE\t1\texecute\t2\tUSR"
+- "482\tPHASE\t2\tmul\t1\tUSR"
+- "483\tPHASE\t3\twriteback\t0\tUSR"
+- "484\tFETCH\t30\t16000000\tUSR"
+- "485\tPHASE\t1\texecute\t1\tUSR"
+- "486\tPHASE\t2\twriteback\t0\tUSR"
+- "487\tFETCH\t31\t21000022\tUSR"
+- "488\tPHASE\t1\texecute\t2\tUSR"
+- "489\tPHASE\t2\tbranch\t1\tUSR"
+- "490\tPHASE\t3\twriteback\t0\tUSR"
+- "491\tFETCH\t34\t01000000\tUSR"
+- "492\tPHASE\t1\twriteback\t0\tUSR"
+- "493\tFETCH\t35\t01000007\tUSR"
+- "494\tPHASE\t1\twriteback\t0\tUSR"
+- "495\tFETCH\t36\t04000000\tUSR"
+- "496\tPHASE\t1\texecute\t2\tUSR"
+- "497\tPHASE\t2\tmemory\t1\tUSR"
+- "498\tPHASE\t3\twriteback\t0\tUSR"
+- "499\tFETCH\t37\t01000008\tUSR"
+- "500\tPHASE\t1\twriteback\t0\tUSR"
+- "5000000\tPHASE\t3\twriteback\t0\tUSR"
+- "10000000\tPHASE\t1\twriteback\t0\tUSR"
+- "15000000\tPHASE\t2\tbranch\t1\tUSR"
+- "20000000\tFETCH\t29\t12000000\tUSR"
+- "25000000\tPHASE\t1\texecute\t2\tUSR"
+- "30000000\tFETCH\t103\t05000000\tUSR"
+- "35000000\tFETCH\t177\t0100000C\tUSR"
+- "40000000\tFETCH\t100\t01000007\tUSR"
+- "45000000\tPHASE\t3\twriteback\t0\tUSR"
+- "50000000\tFETCH\t113\t06000000\tUSR"
+- "55000000\tPHASE\t3\twriteback\t0\tUSR"
+- "56619231\tPHASE\t1\texecute\t2\tUSR"
+- "56619232\tPHASE\t2\tmemory\t1\tUSR"
+- "56619233\tPHASE\t3\twriteback\t0\tUSR"
+- "56619234\tFETCH\t271\t01000013\tUSR"
+- "56619235\tPHASE\t1\twriteback\t0\tUSR"
+- "56619236\tFETCH\t272\t01000003\tUSR"
+- "56619237\tPHASE\t1\twriteback\t0\tUSR"
+- "56619238\tFETCH\t273\t04000000\tUSR"
+- "56619239\tPHASE\t1\texecute\t2\tUSR"
+- "56619240\tPHASE\t2\tmemory\t1\tUSR"
+- "56619241\tPHASE\t3\twriteback\t0\tUSR"
+- "56619242\tFETCH\t274\t05000000\tUSR"
+- "56619243\tPHASE\t1\texecute\t2\tUSR"
+- "56619244\tPHASE\t2\tmemory\t1\tUSR"
+- "56619245\tPHASE\t3\twriteback\t0\tUSR"
+- "56619246\tFETCH\t275\t220000F3\tUSR"
+- "56619247\tPHASE\t1\texecute\t1\tUSR"
+- "56619248\tPHASE\t2\twriteback\t0\tUSR"
+- "56619249\tFETCH\t243\t01000012\tUSR"
+- "56619250\tPHASE\t1\twriteback\t0\tUSR"
+- "56619251\tFETCH\t244\t04000000\tUSR"
+- "56619252\tPHASE\t1\texecute\t2\tUSR"
+- "56619253\tPHASE\t2\tmemory\t1\tUSR"
+- "56619254\tPHASE\t3\twriteback\t0\tUSR"
+- "56619255\tFETCH\t245\t0100000A\tUSR"
+- "56619256\tPHASE\t1\twriteback\t0\tUSR"
+- "56619257\tFETCH\t246\t16000000\tUSR"
+- "56619258\tPHASE\t1\texecute\t1\tUSR"
+- "56619259\tPHASE\t2\twriteback\t0\tUSR"
+- "56619260\tFETCH\t247\t21000115\tUSR"
+- "56619261\tPHASE\t1\texecute\t2\tUSR"
+- "56619262\tPHASE\t2\tbranch\t1\tUSR"
+- "56619263\tPHASE\t3\twriteback\t0\tUSR"
+- "56619264\tFETCH\t277\t01000013\tUSR"
+- "56619265\tPHASE\t1\twriteback\t0\tUSR"
+- "56619266\tFETCH\t278\t04000000\tUSR"
+- "56619267\tPHASE\t1\texecute\t2\tUSR"
+- "56619268\tPHASE\t2\tmemory\t1\tUSR"
+- "56619269\tPHASE\t3\twriteback\t0\tUSR"
+- "56619270\tFETCH\t279\t06000000\tUSR"
+- "56619271\tPHASE\t1\twriteback\t0\tUSR"
+- "56619272\tFETCH\t280\t23000000\tUSR"
+- "56619273\tPHASE\t1\texecute\t1\tUSR"
+- "56619274\tPHASE\t2\twriteback\t0\tUSR"
+- "56619275\tFETCH\t276\t20000117\tUSR"
+- "56619276\tPHASE\t1\twriteback\t0\tUSR"
+- "56619277\tFETCH\t279\t06000000\tUSR"
+- "56619278\tPHASE\t1\twriteback\t0\tUSR"
+- "56619279\tFETCH\t280\t23000000\tUSR"
+- "56619280\tPHASE\t1\texecute\t1\tUSR"
+- "56619281\tPHASE\t2\twriteback\t0\tUSR"
+- "56619282\tFETCH\t276\t20000117\tUSR"
+- "56619283\tPHASE\t1\twriteback\t0\tUSR"
+- "56619284\tFETCH\t279\t06000000\tUSR"
+- "56619285\tPHASE\t1\twriteback\t0\tUSR"
+- "56619286\tFETCH\t280\t23000000\tUSR"
+- "56619287\tPHASE\t1\texecute\t1\tUSR"
+- "56619288\tPHASE\t2\twriteback\t0\tUSR"
+- "56619289\tFETCH\t276\t20000117\tUSR"
+- "56619290\tPHASE\t1\twriteback\t0\tUSR"
+- "56619291\tFETCH\t279\t06000000\tUSR"
+- "56619292\tPHASE\t1\twriteback\t0\tUSR"
+- "56619293\tFETCH\t280\t23000000\tUSR"
+- "56619294\tPHASE\t1\texecute\t1\tUSR"
+- "56619295\tPHASE\t2\twriteback\t0\tUSR"
+- "56619296\tFETCH\t276\t20000117\tUSR"
+- "56619297\tPHASE\t1\twriteback\t0\tUSR"
+- "56619298\tFETCH\t279\t06000000\tUSR"
+- "56619299\tPHASE\t1\twriteback\t0\tUSR"
+- "56619300\tFETCH\t280\t23000000\tUSR"
+- "56619301\tPHASE\t1\texecute\t1\tUSR"
+- "56619302\tPHASE\t2\twriteback\t0\tUSR"
+- "56619303\tFETCH\t276\t20000117\tUSR"
+- "56619304\tPHASE\t1\twriteback\t0\tUSR"
+- "56619305\tFETCH\t279\t06000000\tUSR"
+- "56619306\tPHASE\t1\twriteback\t0\tUSR"
+- "56619307\tFETCH\t280\t23000000\tUSR"
+- "56619308\tPHASE\t1\texecute\t1\tUSR"
+- "56619309\tPHASE\t2\twriteback\t0\tUSR"
+- "56619310\tFETCH\t276\t20000117\tUSR"
+- "56619311\tPHASE\t1\twriteback\t0\tUSR"
+- "56619312\tFETCH\t279\t06000000\tUSR"
+- "56619313\tPHASE\t1\twriteback\t0\tUSR"
+- "56619314\tFETCH\t280\t23000000\tUSR"
+- "56619315\tPHASE\t1\texecute\t1\tUSR"
+- "56619316\tPHASE\t2\twriteback\t0\tUSR"
+- "56619317\tFETCH\t276\t20000117\tUSR"
+- "56619318\tPHASE\t1\twriteback\t0\tUSR"
+- "56619319\tFETCH\t279\t06000000\tUSR"
+- "56619320\tPHASE\t1\twriteback\t0\tUSR"
+- "56619321\tFETCH\t280\t23000000\tUSR"
+- "56619322\tPHASE\t1\texecute\t1\tUSR"
+- "56619323\tPHASE\t2\twriteback\t0\tUSR"
+- "56619324\tFETCH\t276\t20000117\tUSR"
+- "56619325\tPHASE\t1\twriteback\t0\tUSR"
+- "56619326\tFETCH\t279\t06000000\tUSR"
+- "56619327\tPHASE\t1\twriteback\t0\tUSR"
+- "56619328\tFETCH\t280\t23000000\tUSR"
+- "56619329\tPHASE\t1\texecute\t1\tUSR"
+- "56619330\tPHASE\t2\twriteback\t0\tUSR"
+- "56619331\tFETCH\t276\t20000117\tUSR"
+- "56619332\tPHASE\t1\twriteback\t0\tUSR"
+- "56619333\tFETCH\t279\t06000000\tUSR"
+- "56619334\tPHASE\t1\twriteback\t0\tUSR"
+- "56619335\tFETCH\t280\t23000000\tUSR"
+- "56619336\tPHASE\t1\texecute\t1\tUSR"
+- "56619337\tPHASE\t2\twriteback\t0\tUSR"
+- "56619338\tFETCH\t347\t05000000\tUSR"
+- "56619339\tPHASE\t1\texecute\t2\tUSR"
+- "56619340\tPHASE\t2\tmemory\t1\tUSR"
+- "56619341\tPHASE\t3\twriteback\t0\tUSR"
+- "56619342\tFETCH\t348\t01000005\tUSR"
+- "56619343\tPHASE\t1\twriteback\t0\tUSR"
+- "56619344\tFETCH\t349\t04000000\tUSR"
+- "56619345\tPHASE\t1\texecute\t2\tUSR"
+- "56619346\tPHASE\t2\tmemory\t1\tUSR"
+- "56619347\tPHASE\t3\twriteback\t0\tUSR"
+- "56619348\tFETCH\t350\t03000000\tUSR"
+- "56619349\tPHASE\t1\twriteback\t0\tUSR"
+- "56619350\tFETCH\t351\t01000014\tUSR"
+- "56619351\tPHASE\t1\twriteback\t0\tUSR"
+- "56619352\tFETCH\t352\t01000005\tUSR"
+- "56619353\tPHASE\t1\twriteback\t0\tUSR"
+- "56619354\tFETCH\t353\t04000000\tUSR"
+- "56619355\tPHASE\t1\texecute\t2\tUSR"
+- "56619356\tPHASE\t2\tmemory\t1\tUSR"
+- "56619357\tPHASE\t3\twriteback\t0\tUSR"
+- "56619358\tFETCH\t354\t05000000\tUSR"
+- "56619359\tPHASE\t1\texecute\t2\tUSR"
+- "56619360\tPHASE\t2\tmemory\t1\tUSR"
+- "56619361\tPHASE\t3\twriteback\t0\tUSR"
+- "56619362\tFETCH\t355\t22000119\tUSR"
+- "56619363\tPHASE\t1\texecute\t1\tUSR"
+- "56619364\tPHASE\t2\twriteback\t0\tUSR"
+- "56619365\tFETCH\t281\t01000014\tUSR"
+- "56619366\tPHASE\t1\twriteback\t0\tUSR"
+- "56619367\tFETCH\t282\t04000000\tUSR"
+- "56619368\tPHASE\t1\texecute\t2\tUSR"
+- "56619369\tPHASE\t2\tmemory\t1\tUSR"
+- "56619370\tPHASE\t3\twriteback\t0\tUSR"
+- "56619371\tFETCH\t283\t01000100\tUSR"
+- "56619372\tPHASE\t1\twriteback\t0\tUSR"
+- "56619373\tFETCH\t284\t14000000\tUSR"
+- "56619374\tPHASE\t1\texecute\t2\tUSR"
+- "56619375\tPHASE\t2\tdiv\t1\tUSR"
+- "56619376\tPHASE\t3\twriteback\t0\tUSR"
+- "56619377\tFETCH\t285\t02000000\tUSR"
+- "56619378\tPHASE\t1\twriteback\t0\tUSR"
+- "56619379\tFETCH\t286\t31000001\tUSR"
+- "56619380\tPHASE\t1\texecute\t1\tUSR"
+- "56619381\tPHASE\t2\twriteback\t0\tUSR"
+- "56619382\tFETCH\t287\t03000000\tUSR"
+- "56619383\tPHASE\t1\twriteback\t0\tUSR"
+- "56619384\tFETCH\t288\t01000014\tUSR"
+- "56619385\tPHASE\t1\twriteback\t0\tUSR"
+- "56619386\tFETCH\t289\t01000014\tUSR"
+- "56619387\tPHASE\t1\twriteback\t0\tUSR"
+- "56619388\tFETCH\t290\t04000000\tUSR"
+- "56619389\tPHASE\t1\texecute\t2\tUSR"
+- "56619390\tPHASE\t2\tmemory\t1\tUSR"
+- "56619391\tPHASE\t3\twriteback\t0\tUSR"
+- "56619392\tFETCH\t291\t01000100\tUSR"
+- "56619393\tPHASE\t1\twriteback\t0\tUSR"
+- "56619394\tFETCH\t292\t13000000\tUSR"
+- "56619395\tPHASE\t1\texecute\t2\tUSR"
+- "56619396\tPHASE\t2\tdiv\t1\tUSR"
+- "56619397\tPHASE\t3\twriteback\t0\tUSR"
+- "56619398\tFETCH\t293\t05000000\tUSR"
+- "56619399\tPHASE\t1\texecute\t2\tUSR"
+- "56619400\tPHASE\t2\tmemory\t1\tUSR"
+- "56619401\tPHASE\t3\twriteback\t0\tUSR"
+- "56619402\tFETCH\t294\t01000014\tUSR"
+- "56619403\tPHASE\t1\twriteback\t0\tUSR"
+- "56619404\tFETCH\t295\t04000000\tUSR"
+- "56619405\tPHASE\t1\texecute\t2\tUSR"
+- "56619406\tPHASE\t2\tmemory\t1\tUSR"
+- "56619407\tPHASE\t3\twriteback\t0\tUSR"
+- "56619408\tFETCH\t296\t03000000\tUSR"
+- "56619409\tPHASE\t1\twriteback\t0\tUSR"
+- "56619410\tFETCH\t297\t01000014\tUSR"
+- "56619411\tPHASE\t1\twriteback\t0\tUSR"
+- "56619412\tFETCH\t298\t04000000\tUSR"
+- "56619413\tPHASE\t1\texecute\t2\tUSR"
+- "56619414\tPHASE\t2\tmemory\t1\tUSR"
+- "56619415\tPHASE\t3\twriteback\t0\tUSR"
+- "56619416\tFETCH\t299\t01000100\tUSR"
+- "56619417\tPHASE\t1\twriteback\t0\tUSR"
+- "56619418\tFETCH\t300\t14000000\tUSR"
+- "56619419\tPHASE\t1\texecute\t2\tUSR"
+- "56619420\tPHASE\t2\tdiv\t1\tUSR"
+- "56619421\tPHASE\t3\twriteback\t0\tUSR"
+- "56619422\tFETCH\t301\t02000000\tUSR"
+- "56619423\tPHASE\t1\twriteback\t0\tUSR"
+- "56619424\tFETCH\t302\t31000001\tUSR"
+- "56619425\tPHASE\t1\texecute\t1\tUSR"
+- "56619426\tPHASE\t2\twriteback\t0\tUSR"
+- "56619427\tFETCH\t303\t03000000\tUSR"
+- "56619428\tPHASE\t1\twriteback\t0\tUSR"
+- "56619429\tFETCH\t304\t01000014\tUSR"
+- "56619430\tPHASE\t1\twriteback\t0\tUSR"
+- "56619431\tFETCH\t305\t01000014\tUSR"
+- "56619432\tPHASE\t1\twriteback\t0\tUSR"
+- "56619433\tFETCH\t306\t04000000\tUSR"
+- "56619434\tPHASE\t1\texecute\t2\tUSR"
+- "56619435\tPHASE\t2\tmemory\t1\tUSR"
+- "56619436\tPHASE\t3\twriteback\t0\tUSR"
+- "56619437\tFETCH\t307\t01000100\tUSR"
+- "56619438\tPHASE\t1\twriteback\t0\tUSR"
+- "56619439\tFETCH\t308\t13000000\tUSR"
+- "56619440\tPHASE\t1\texecute\t2\tUSR"
+- "56619441\tPHASE\t2\tdiv\t1\tUSR"
+- "56619442\tPHASE\t3\twriteback\t0\tUSR"
+- "56619443\tFETCH\t309\t05000000\tUSR"
+- "56619444\tPHASE\t1\texecute\t2\tUSR"
+- "56619445\tPHASE\t2\tmemory\t1\tUSR"
+- "56619446\tPHASE\t3\twriteback\t0\tUSR"
+- "56619447\tFETCH\t310\t01000014\tUSR"
+- "56619448\tPHASE\t1\twriteback\t0\tUSR"
+- "56619449\tFETCH\t311\t04000000\tUSR"
+- "56619450\tPHASE\t1\texecute\t2\tUSR"
+- "56619451\tPHASE\t2\tmemory\t1\tUSR"
+- "56619452\tPHASE\t3\twriteback\t0\tUSR"
+- "56619453\tFETCH\t312\t03000000\tUSR"
+- "56619454\tPHASE\t1\twriteback\t0\tUSR"
+- "56619455\tFETCH\t313\t01000014\tUSR"
+- "56619456\tPHASE\t1\twriteback\t0\tUSR"
+- "56619457\tFETCH\t314\t04000000\tUSR"
+- "56619458\tPHASE\t1\texecute\t2\tUSR"
+- "56619459\tPHASE\t2\tmemory\t1\tUSR"
+- "56619460\tPHASE\t3\twriteback\t0\tUSR"
+- "56619461\tFETCH\t315\t01000100\tUSR"
+- "56619462\tPHASE\t1\twriteback\t0\tUSR"
+- "56619463\tFETCH\t316\t14000000\tUSR"
+- "56619464\tPHASE\t1\texecute\t2\tUSR"
+- "56619465\tPHASE\t2\tdiv\t1\tUSR"
+- "56619466\tPHASE\t3\twriteback\t0\tUSR"
+- "56619467\tFETCH\t317\t02000000\tUSR"
+- "56619468\tPHASE\t1\twriteback\t0\tUSR"
+- "56619469\tFETCH\t318\t31000001\tUSR"
+- "56619470\tPHASE\t1\texecute\t1\tUSR"
+- "56619471\tPHASE\t2\twriteback\t0\tUSR"
+- "56619472\tFETCH\t319\t03000000\tUSR"
+- "56619473\tPHASE\t1\twriteback\t0\tUSR"
+- "56619474\tFETCH\t320\t01000014\tUSR"
+- "56619475\tPHASE\t1\twriteback\t0\tUSR"
+- "56619476\tFETCH\t321\t01000014\tUSR"
+- "56619477\tPHASE\t1\twriteback\t0\tUSR"
+- "56619478\tFETCH\t322\t04000000\tUSR"
+- "56619479\tPHASE\t1\texecute\t2\tUSR"
+- "56619480\tPHASE\t2\tmemory\t1\tUSR"
+- "56619481\tPHASE\t3\twriteback\t0\tUSR"
+- "56619482\tFETCH\t323\t01000100\tUSR"
+- "56619483\tPHASE\t1\twriteback\t0\tUSR"
+- "56619484\tFETCH\t324\t13000000\tUSR"
+- "56619485\tPHASE\t1\texecute\t2\tUSR"
+- "56619486\tPHASE\t2\tdiv\t1\tUSR"
+- "56619487\tPHASE\t3\twriteback\t0\tUSR"
+- "56619488\tFETCH\t325\t05000000\tUSR"
+- "56619489\tPHASE\t1\texecute\t2\tUSR"
+- "56619490\tPHASE\t2\tmemory\t1\tUSR"
+- "56619491\tPHASE\t3\twriteback\t0\tUSR"
+- "56619492\tFETCH\t326\t01000014\tUSR"
+- "56619493\tPHASE\t1\twriteback\t0\tUSR"
+- "56619494\tFETCH\t327\t04000000\tUSR"
+- "56619495\tPHASE\t1\texecute\t2\tUSR"
+- "56619496\tPHASE\t2\tmemory\t1\tUSR"
+- "56619497\tPHASE\t3\twriteback\t0\tUSR"
+- "56619498\tFETCH\t328\t03000000\tUSR"
+- "56619499\tPHASE\t1\twriteback\t0\tUSR"
+- "56619500\tFETCH\t329\t01000014\tUSR"
+- "56619501\tPHASE\t1\twriteback\t0\tUSR"
+- "56619502\tFETCH\t330\t04000000\tUSR"
+- "56619503\tPHASE\t1\texecute\t2\tUSR"
+- "56619504\tPHASE\t2\tmemory\t1\tUSR"
+- "56619505\tPHASE\t3\twriteback\t0\tUSR"
+- "56619506\tFETCH\t331\t01000100\tUSR"
+- "56619507\tPHASE\t1\twriteback\t0\tUSR"
+- "56619508\tFETCH\t332\t14000000\tUSR"
+- "56619509\tPHASE\t1\texecute\t2\tUSR"
+- "56619510\tPHASE\t2\tdiv\t1\tUSR"
+- "56619511\tPHASE\t3\twriteback\t0\tUSR"
+- "56619512\tFETCH\t333\t02000000\tUSR"
+- "56619513\tPHASE\t1\twriteback\t0\tUSR"
+- "56619514\tFETCH\t334\t31000001\tUSR"
+- "56619515\tPHASE\t1\texecute\t1\tUSR"
+- "56619516\tPHASE\t2\twriteback\t0\tUSR"
+- "56619517\tFETCH\t335\t03000000\tUSR"
+- "56619518\tPHASE\t1\twriteback\t0\tUSR"
+- "56619519\tFETCH\t336\t01000000\tUSR"
+- "56619520\tPHASE\t1\twriteback\t0\tUSR"
+- "56619521\tFETCH\t337\t06000000\tUSR"
+- "56619522\tPHASE\t1\twriteback\t0\tUSR"
+- "56619523\tFETCH\t338\t23000000\tUSR"
+- "56619524\tPHASE\t1\texecute\t1\tUSR"
+- "56619525\tPHASE\t2\twriteback\t0\tUSR"
+- "56619526\tFETCH\t356\t03000000\tUSR"
+- "56619527\tPHASE\t1\twriteback\t0\tUSR"
+- "56619528\tFETCH\t357\t01000000\tUSR"
+- "56619529\tPHASE\t1\twriteback\t0\tUSR"
+- "56619530\tFETCH\t358\t32000000\tUSR"
+- "56619530\tPHASE\t1\twriteback\t0\tUSR"

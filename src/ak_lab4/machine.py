@@ -1,4 +1,4 @@
-"""Модель процессора: ControlUnit + DataPath (Гарвард, stack, tick)."""
+"""Модель процессора: ControlUnit + DataPath"""
 
 from __future__ import annotations
 
@@ -208,8 +208,9 @@ class DataPath:
         self.shadow_busy_ticks = 0  # тики до BG commit в DM
         self.last_load_addr: int | None = None  # DLE bypass: последний LOAD
         self.last_load_value: int | None = None
-        self._irq_delivered_byte: int | None = None  # байт линии для первого IN в ISR
-        self._cu: ControlUnit | None = None  # ссылка для superscalar и журнала
+        self._irq_delivered_byte: int | None = None
+        self._irq_delivered_eof: bool = False
+        self._cu: ControlUnit | None = None
 
     def _cu_ref(self) -> ControlUnit:
         if self._cu is None:
@@ -323,12 +324,16 @@ class DataPath:
 
     def signal_read_port(self, port: int) -> int:
         if port == int(Port.DATA_IN):
+            cu = self._cu_ref()
+            if cu.interrupt_depth <= 0:
+                return -1
+            if self._irq_delivered_eof:
+                self._irq_delivered_eof = False
+                return -1
             if self._irq_delivered_byte is not None:
                 b = self._irq_delivered_byte & 0xFF
                 self._irq_delivered_byte = None
                 return b
-            if self.input_queue:
-                return self.input_queue.popleft() & 0xFF
             return -1
         return 0
 
@@ -350,6 +355,7 @@ class ControlUnit:
         irq_schedule: tuple[IrqScheduleEvent, ...] = (),
         irq_pending: list[bool] | None = None,
         irq_line_value: list[int] | None = None,
+        irq_line_eof: list[bool] | None = None,
         irq_enabled: bool = True,
     ) -> None:
         self.dp = dp
@@ -358,19 +364,22 @@ class ControlUnit:
         self.pc = pc
         self.ticks = 0
         self.halted = False
-        self.superscalar = superscalar  # двойная выдача + deferred store
-        self.pipeline: _InFlightInsn | None = None  # in-flight: незавершённая инструкция
-        self.suspended_user_pipeline: _InFlightInsn | None = None  # сохранена при IRQ trap
-        self.irq_schedule = irq_schedule  # внешние события trap по тактам
-        self._schedule_i = 0  # индекс следующего события в irq_schedule
-        self.irq_pending = (  # запрос по линии IRQ (не stdin)
+        self.superscalar = superscalar
+        self.pipeline: _InFlightInsn | None = None
+        self.suspended_user_pipeline: _InFlightInsn | None = None
+        self.irq_schedule = irq_schedule
+        self._schedule_i = 0
+        self.irq_pending = (
             irq_pending if irq_pending is not None else [False] * NUM_IRQ_LINES
         )
-        self.irq_line_value = (  # байт на линии при доставке trap
+        self.irq_line_value = (
             irq_line_value if irq_line_value is not None else [0] * NUM_IRQ_LINES
         )
-        self.irq_enabled = irq_enabled  # EI/CLI
-        self.interrupt_depth = 0  # 0 = USR, >0 = внутри ISR
+        self.irq_line_eof = (
+            irq_line_eof if irq_line_eof is not None else [False] * NUM_IRQ_LINES
+        )
+        self.irq_enabled = irq_enabled
+        self.interrupt_depth = 0
 
     def current_tick(self) -> int:
         return self.ticks
@@ -407,8 +416,9 @@ class ControlUnit:
                 break
             irq = ev.irq
             if 0 <= irq < NUM_IRQ_LINES:
-                v = ev.value & 0xFF
-                self.irq_line_value[irq] = v
+                self.irq_line_eof[irq] = ev.eof
+                if not ev.eof:
+                    self.irq_line_value[irq] = ev.value & 0xFF
                 self.irq_pending[irq] = True
             self._schedule_i += 1
 
@@ -478,7 +488,12 @@ class ControlUnit:
             return
         phase = insn.phases[insn.phase_i]
         self._advance_insn_phase(insn, phase, log)
-        self.pipeline = insn if insn.phases_remaining() > 0 else None
+        if insn.phases_remaining() > 0:
+            self.pipeline = insn
+        elif self.pipeline is not insn:
+            return
+        else:
+            self.pipeline = None
 
     def _try_par_issue(self, log: TextIO | None) -> bool:
         pc0 = self.ensure_im_pc(self.pc)
@@ -761,7 +776,11 @@ class ControlUnit:
             self.dp.signal_push(ret_pc & 0xFFFFFFFF)
             self.pc = self._read_vector_target(irq)
             self.interrupt_depth += 1
-            self.dp._irq_delivered_byte = self.irq_line_value[irq] & 0xFF
+            if self.irq_line_eof[irq]:
+                self.dp._irq_delivered_eof = True
+                self.irq_line_eof[irq] = False
+            else:
+                self.dp._irq_delivered_byte = self.irq_line_value[irq] & 0xFF
             self.irq_pending[irq] = False
             if log is not None:
                 log.write(f"{self.ticks}\tIRQ_TRAP\t{irq}\t{self.exec_mode()}\n")
@@ -784,6 +803,7 @@ class Machine:
         irq_schedule: tuple[IrqScheduleEvent, ...] = (),
         irq_pending: list[bool] | None = None,
         irq_line_value: list[int] | None = None,
+        irq_line_eof: list[bool] | None = None,
         irq_enabled: bool = True,
     ) -> None:
         self.data_path = DataPath(dm=dm, sp=sp, input_queue=input_queue)
@@ -795,6 +815,7 @@ class Machine:
             irq_schedule=irq_schedule,
             irq_pending=irq_pending,
             irq_line_value=irq_line_value,
+            irq_line_eof=irq_line_eof,
             irq_enabled=irq_enabled,
         )
 

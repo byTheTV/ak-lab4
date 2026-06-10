@@ -1,0 +1,133 @@
+name: double_math
+source: |
+  (progn
+    (setq a_hi 1)
+    (setq a_lo -1)
+    (setq b_hi 2)
+    (setq b_lo 1)
+    (setq sum_lo (+ a_lo b_lo))
+    (setq carry (if (eq sum_lo 0) 1 0))
+    (setq sum_hi (+ (+ a_hi b_hi) carry))
+    (out (+ sum_lo 48))
+    (out 32)
+    (out (+ sum_hi 48))
+    (out 10))
+input: []
+max_ticks: 10000000
+fail_on_max_ticks: true
+output: |
+  0 4
+code_listing: |
+  0 - 01000000
+  1 - 01000001
+  2 - 05000000
+  3 - 01000000
+  4 - 04000000
+  5 - 03000000
+  6 - 01000001
+  7 - 01FFFFFF
+  8 - 05000000
+  9 - 01000001
+  10 - 04000000
+  11 - 03000000
+  12 - 01000002
+  13 - 01000002
+  14 - 05000000
+  15 - 01000002
+  16 - 04000000
+  17 - 03000000
+  18 - 01000003
+  19 - 01000001
+  20 - 05000000
+  21 - 01000003
+  22 - 04000000
+  23 - 03000000
+  24 - 01000004
+  25 - 01000001
+  26 - 04000000
+  27 - 01000003
+  28 - 04000000
+  29 - 10000000
+  30 - 05000000
+  31 - 01000004
+  32 - 04000000
+  33 - 03000000
+  34 - 01000005
+  35 - 01000004
+  36 - 04000000
+  37 - 01000000
+  38 - 15000000
+  39 - 2100002A
+  40 - 01000001
+  41 - 2000002B
+  42 - 01000000
+  43 - 05000000
+  44 - 01000005
+  45 - 04000000
+  46 - 03000000
+  47 - 01000006
+  48 - 01000000
+  49 - 04000000
+  50 - 01000002
+  51 - 04000000
+  52 - 10000000
+  53 - 01000005
+  54 - 04000000
+  55 - 10000000
+  56 - 05000000
+  57 - 01000006
+  58 - 04000000
+  59 - 03000000
+  60 - 01000004
+  61 - 04000000
+  62 - 01000030
+  63 - 10000000
+  64 - 02000000
+  65 - 31000001
+  66 - 01000020
+  67 - 02000000
+  68 - 31000001
+  69 - 01000006
+  70 - 04000000
+  71 - 01000030
+  72 - 10000000
+  73 - 02000000
+  74 - 31000001
+  75 - 0100000A
+  76 - 02000000
+  77 - 31000001
+  78 - 32000000
+data_listing: ''
+log_excerpt:
+- "1\tFETCH\t0\t01000000\tUSR"
+- "2\tPHASE\t1\twriteback\t0\tUSR"
+- "3\tFETCH\t1\t01000001\tUSR"
+- "4\tPHASE\t1\twriteback\t0\tUSR"
+- "5\tFETCH\t2\t05000000\tUSR"
+- "6\tPHASE\t1\texecute\t2\tUSR"
+- "7\tPHASE\t2\tmemory\t1\tUSR"
+- "8\tPHASE\t3\twriteback\t0\tUSR"
+- "9\tFETCH\t3\t01000000\tUSR"
+- "10\tPHASE\t1\twriteback\t0\tUSR"
+- "11\tFETCH\t4\t04000000\tUSR"
+- "12\tPHASE\t1\texecute\t2\tUSR"
+- "13\tPHASE\t2\tmemory\t1\tUSR"
+- "14\tPHASE\t3\twriteback\t0\tUSR"
+- "15\tFETCH\t5\t03000000\tUSR"
+- "16\tPHASE\t1\twriteback\t0\tUSR"
+- "17\tFETCH\t6\t01000001\tUSR"
+- "18\tPHASE\t1\twriteback\t0\tUSR"
+- "199\tFETCH\t73\t02000000\tUSR"
+- "200\tPHASE\t1\twriteback\t0\tUSR"
+- "201\tFETCH\t74\t31000001\tUSR"
+- "202\tPHASE\t1\texecute\t1\tUSR"
+- "203\tPHASE\t2\twriteback\t0\tUSR"
+- "204\tFETCH\t75\t0100000A\tUSR"
+- "205\tPHASE\t1\twriteback\t0\tUSR"
+- "206\tFETCH\t76\t02000000\tUSR"
+- "207\tPHASE\t1\twriteback\t0\tUSR"
+- "208\tFETCH\t77\t31000001\tUSR"
+- "209\tPHASE\t1\texecute\t1\tUSR"
+- "210\tPHASE\t2\twriteback\t0\tUSR"
+- "211\tFETCH\t78\t32000000\tUSR"
+- "211\tPHASE\t1\twriteback\t0\tUSR"
