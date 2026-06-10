@@ -15,13 +15,9 @@ from ak_lab4.translator import compile_forms, parse_many
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GOLDEN_ROOT = REPO_ROOT / "golden"
+EXAMPLES_ROOT = REPO_ROOT / "examples"
 
 _DEFAULT_MAX_TICKS = 10_000_000
-_MAX_TICKS: dict[str, int] = {"prob1": 65_000_000}
-
-_LOG_PROFILES: dict[str, tuple[int, int, int]] = {
-    "prob1": (500, 5_000_000, 300),
-}
 
 _LOG_FULL_LIMIT = 80
 _LOG_HEAD = 18
@@ -48,6 +44,45 @@ class GoldenRun:
 
 def golden_yml_paths() -> tuple[Path, ...]:
     return tuple(sorted(GOLDEN_ROOT.glob("*.yml")))
+
+
+def example_lisp_path(name: str) -> Path:
+    return EXAMPLES_ROOT / f"{name}.lisp"
+
+
+def strip_example_header(source: str) -> str:
+    lines = source.splitlines()
+    while lines and (not lines[0].strip() or lines[0].lstrip().startswith(";")):
+        lines.pop(0)
+    body = "\n".join(lines).strip()
+    return body + "\n" if body else ""
+
+
+def load_example_source(name: str) -> str:
+    path = example_lisp_path(name)
+    if not path.is_file():
+        msg = f"нет исходника: {path}"
+        raise FileNotFoundError(msg)
+    return strip_example_header(path.read_text(encoding="utf-8"))
+
+
+def regenerate_golden_yml(
+    name: str,
+    *,
+    schedule: tuple[IrqScheduleEvent, ...] = (),
+    max_ticks: int | None = None,
+) -> Path:
+    source = load_example_source(name)
+    limit = max_ticks if max_ticks is not None else _DEFAULT_MAX_TICKS
+    doc = build_golden_document(
+        source,
+        schedule=schedule,
+        case=name,
+        max_ticks=limit,
+    )
+    path = GOLDEN_ROOT / f"{name}.yml"
+    write_golden_yml(path, doc)
+    return path
 
 
 def load_golden_yml(path: Path) -> dict[str, Any]:
@@ -163,22 +198,6 @@ def _select_log_lines(full_log: str, case: str) -> list[str]:
     if len(lines) <= _LOG_FULL_LIMIT:
         return lines
 
-    profile = _LOG_PROFILES.get(case)
-    if profile is not None:
-        head_ticks, sample_interval, tail_ticks = profile
-        parsed: list[tuple[int, str]] = []
-        max_tick = 0
-        for line in lines:
-            tick = int(line.split("\t", 1)[0])
-            max_tick = max(max_tick, tick)
-            parsed.append((tick, line))
-        keep_ticks: set[int] = set(range(1, head_ticks + 1))
-        for tick in range(sample_interval, max_tick, sample_interval):
-            keep_ticks.add(tick)
-        tail_start = max(1, max_tick - tail_ticks + 1)
-        keep_ticks.update(range(tail_start, max_tick + 1))
-        return [line for tick, line in parsed if tick in keep_ticks]
-
     keep: set[int] = set(range(min(_LOG_HEAD, len(lines))))
     keep.update(range(max(0, len(lines) - _LOG_TAIL), len(lines)))
     for i, line in enumerate(lines):
@@ -219,7 +238,7 @@ def run_source(
         compiled = compile_forms(parse_many(source))
         code, data = compiled.code, compiled.data
     im, dm = init_memory_from_segments(code, data)
-    limit = max_ticks if max_ticks is not None else _MAX_TICKS.get(case, _DEFAULT_MAX_TICKS)
+    limit = max_ticks if max_ticks is not None else _DEFAULT_MAX_TICKS
     machine = Machine(
         im=im,
         dm=dm,
@@ -244,8 +263,9 @@ def capture_run(
     code_listing: str | None = None,
     data_listing: str | None = None,
     max_ticks: int | None = None,
+    capture_log: bool = True,
 ) -> GoldenRun:
-    buf = StringIO()
+    buf: StringIO | None = StringIO() if capture_log else None
     machine, code, data = run_source(
         source,
         schedule=schedule,
@@ -256,9 +276,13 @@ def capture_run(
         data_listing=data_listing,
         max_ticks=max_ticks,
     )
+    if not capture_log:
+        log_excerpt: list[str] = []
+    else:
+        log_excerpt = build_log_excerpt(buf.getvalue(), case)  # type: ignore[union-attr]
     return GoldenRun(
         output=bytes(machine.out_bytes),
-        log_excerpt=build_log_excerpt(buf.getvalue(), case),
+        log_excerpt=log_excerpt,
         code_listing=format_listing(code),
         data_listing=format_listing(data),
     )
@@ -270,8 +294,9 @@ def build_golden_document(
     schedule: tuple[IrqScheduleEvent, ...] = (),
     case: str = "",
     superscalar: bool = False,
+    max_ticks: int | None = None,
 ) -> dict[str, Any]:
-    limit = _MAX_TICKS.get(case, _DEFAULT_MAX_TICKS)
+    limit = max_ticks if max_ticks is not None else _DEFAULT_MAX_TICKS
     run = capture_run(
         source,
         schedule=schedule,
@@ -312,14 +337,11 @@ def run_from_yml(path: Path, *, superscalar: bool = False) -> GoldenRun:
     schedule = parse_input(doc.get("input", doc.get("schedule")))
     case = str(doc.get("name", path.stem))
     max_ticks = int(doc["max_ticks"]) if "max_ticks" in doc else None
-    listing_code = str(doc["code_listing"]) if case == "prob1" else None
-    listing_data = str(doc["data_listing"]) if case == "prob1" else None
     return capture_run(
         source,
         schedule=schedule,
         case=case,
         superscalar=superscalar,
-        code_listing=listing_code,
-        data_listing=listing_data,
         max_ticks=max_ticks,
+        capture_log=not superscalar,
     )

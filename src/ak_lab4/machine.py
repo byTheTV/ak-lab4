@@ -29,6 +29,15 @@ class MachineFault(RuntimeError):
     """Сбой исполнения (стек, PC, деление на 0, ...)"""
 
 
+def _log_enabled(log: TextIO | None, tick: int) -> bool:
+    if log is None:
+        return False
+    want = getattr(log, "want_tick", None)
+    if want is not None and not want(tick):
+        return False
+    return True
+
+
 def scalar_ticks_for_opcode(op: int) -> int:
     """Число вызовов step() на одну инструкцию в scalar (без PAR)."""
     if op in (
@@ -250,7 +259,7 @@ class DataPath:
         a = self.ensure_dm_addr(addr)
         self.dm[a] = value & 0xFFFFFFFF
         self.note_store_visibility(a, value)
-        if log is not None:
+        if _log_enabled(log, cu.ticks):
             log.write(
                 f"{cu.ticks}\tBG_STORE\t{a}:{value & 0xFFFFFFFF:08X}\t{cu.exec_mode()}\n",
             )
@@ -265,7 +274,7 @@ class DataPath:
         cu = self._cu_ref()
         if not self.shadow_stores:
             return False
-        if log is not None:
+        if _log_enabled(log, cu.ticks):
             payload = "\t".join(f"{a}:{v:08X}" for a, v in self.shadow_stores)
             log.write(
                 f"{cu.ticks}\tPAR_FLUSH\t{reason}\t{payload}\t{cu.exec_mode()}\n",
@@ -439,14 +448,14 @@ class ControlUnit:
         )
 
     def _log_fetch(self, insn: _InFlightInsn, log: TextIO | None) -> None:
-        if log is None:
+        if not _log_enabled(log, self.ticks):
             return
         log.write(f"{self.ticks}\tFETCH\t{insn.pc}\t{insn.word:08X}\t{self.exec_mode()}\n")
 
     def _log_phase(
         self, insn: _InFlightInsn, phase: str, remaining: int, log: TextIO | None
     ) -> None:
-        if log is None:
+        if not _log_enabled(log, self.ticks):
             return
         log.write(
             f"{self.ticks}\tPHASE\t{insn.phase_i}\t{phase}\t{remaining}\t{self.exec_mode()}\n",
@@ -509,11 +518,11 @@ class ControlUnit:
         if not can_dual_issue(op0, op1):
             return False
         if _blocked_by_shadow_busy(op1, self.dp.shadow_busy_ticks):
-            if log is not None:
+            if _log_enabled(log, self.ticks):
                 log.write(f"{self.ticks}\tPAR_BLOCK\tshadow_busy\t{self.exec_mode()}\n")
             return False
 
-        if log is not None:
+        if _log_enabled(log, self.ticks):
             log.write(
                 f"{self.ticks}\tPAR\t{pc0}\t{word0:08X}\t{pc1}\t{word1:08X}\t{self.exec_mode()}\n",
             )
@@ -776,7 +785,7 @@ class ControlUnit:
             else:
                 self.dp._irq_delivered_byte = self.irq_line_value[irq] & 0xFF
             self.irq_pending[irq] = False
-            if log is not None:
+            if _log_enabled(log, self.ticks):
                 log.write(f"{self.ticks}\tIRQ_TRAP\t{irq}\t{self.exec_mode()}\n")
             return True
         return False

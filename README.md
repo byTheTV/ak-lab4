@@ -424,21 +424,29 @@ ControlUnit (PNG):
 
 - **CI:** ruff (lint + format), mypy, pytest ([ci.yml](.github/workflows/ci.yml)).
 - **Юнит/интеграция:** ISA, парсер, кодогенератор, CLI, CPU, IRQ, superscalar, потактовый pipeline.
-- **Golden:** транслятор + симулятор, сверка `DATA_OUT` с эталоном ([golden_support.py](tests/golden_support.py), [test_golden_core_cases.py](tests/test_golden_core_cases.py)).
+- **Golden:** транслятор + симулятор, сверка с эталоном ([golden_support.py](tests/golden_support.py), [test_golden.py](tests/test_golden.py)).
 
 ### Набор golden-кейсов
 
-| Каталог | Назначение |
-|---------|------------|
-| hello | базовый вывод строки |
-| cat | чтение из `DATA_IN` и вывод |
-| hello_user_name | ввод имени и приветствие |
-| sort | сортировка чисел (стек + DM) |
-| pstr_two | строки pstr |
-| double_math | 64-битная арифметика (два 32-битных слова) |
-| prob1 | вариантный алгоритм (факторизация / Project Euler style, длинный прогон) |
+Эталоны — YAML в [golden/](golden/): исходник, расписание ввода, `output`, `code_listing`, `data_listing`, усечённый `log_excerpt`.
 
-В каталогах golden: `source.tv`, `expected_output.txt`, при необходимости `input.txt`. Машинный код и журнал для отчёта получают трансляцией и `--log` (в эталонах хранится прежде всего вывод порта).
+| Файл | Назначение |
+|------|------------|
+| [hello.yml](golden/hello.yml) | базовый вывод строки |
+| [cat.yml](golden/cat.yml) | чтение из `DATA_IN` и вывод |
+| [hello_user_name.yml](golden/hello_user_name.yml) | ввод имени и приветствие |
+| [sort.yml](golden/sort.yml) | сортировка чисел (стек + DM) |
+| [double_math.yml](golden/double_math.yml) | 64-битная арифметика (два 32-битных слова) |
+| [prob1.yml](golden/prob1.yml) | [Euler #4](https://projecteuler.net/problem=4): наибольший палиндром — произведение двух трёхзначных чисел (`906609`) |
+
+Исходник `prob1` для отчёта и правок: [examples/prob1.lisp](examples/prob1.lisp). После изменения алгоритма пересобрать эталон:
+
+```bash
+python scripts/update_golden.py prob1
+pytest tests/test_golden.py -k prob1
+```
+
+Дополнительно: `test_golden_prob1_superscalar_output` проверяет тот же вывод в режиме superscalar.
 
 ### Покрытие кода
 
