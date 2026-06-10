@@ -28,6 +28,7 @@ _LOG_HEAD = 18
 _LOG_TAIL = 14
 _LOG_IRQ_CTX = 5
 
+
 def _str_representer(dumper: yaml.Dumper, data: str) -> yaml.nodes.ScalarNode:
     if "\n" in data:
         return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
@@ -132,10 +133,7 @@ def parse_input(raw: object) -> tuple[IrqScheduleEvent, ...]:
             out.append(IrqScheduleEvent(tick=tick, irq=irq, eof=True))
             continue
         value = item.get("byte", item.get("value", 0))
-        if isinstance(value, str):
-            byte = ord(value[0]) if value else 0
-        else:
-            byte = int(value) & 0xFF
+        byte = (ord(value[0]) if value else 0) if isinstance(value, str) else int(value) & 0xFF
         out.append(IrqScheduleEvent(tick=tick, irq=irq, value=byte))
     out.sort(key=lambda e: e.tick)
     return tuple(out)

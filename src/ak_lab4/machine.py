@@ -369,15 +369,9 @@ class ControlUnit:
         self.suspended_user_pipeline: _InFlightInsn | None = None
         self.irq_schedule = irq_schedule
         self._schedule_i = 0
-        self.irq_pending = (
-            irq_pending if irq_pending is not None else [False] * NUM_IRQ_LINES
-        )
-        self.irq_line_value = (
-            irq_line_value if irq_line_value is not None else [0] * NUM_IRQ_LINES
-        )
-        self.irq_line_eof = (
-            irq_line_eof if irq_line_eof is not None else [False] * NUM_IRQ_LINES
-        )
+        self.irq_pending = irq_pending if irq_pending is not None else [False] * NUM_IRQ_LINES
+        self.irq_line_value = irq_line_value if irq_line_value is not None else [0] * NUM_IRQ_LINES
+        self.irq_line_eof = irq_line_eof if irq_line_eof is not None else [False] * NUM_IRQ_LINES
         self.irq_enabled = irq_enabled
         self.interrupt_depth = 0
 

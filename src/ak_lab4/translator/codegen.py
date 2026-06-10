@@ -849,11 +849,7 @@ def _compile_with_defuns_interrupts(
         entry = len(words)
         handler_pc[irq] = entry
         hbody = irq_handlers[irq]
-        extra = (
-            [pack_word(Opcode.DROP, 0)]
-            if _handler_needs_drop_before_ret(hbody)
-            else []
-        )
+        extra = [pack_word(Opcode.DROP, 0)] if _handler_needs_drop_before_ret(hbody) else []
         words.extend(
             _emit(
                 hbody,
@@ -899,11 +895,7 @@ def _compile_mains_interrupts(
         entry = len(words)
         handler_pc[irq] = entry
         hbody = irq_handlers[irq]
-        extra = (
-            [pack_word(Opcode.DROP, 0)]
-            if _handler_needs_drop_before_ret(hbody)
-            else []
-        )
+        extra = [pack_word(Opcode.DROP, 0)] if _handler_needs_drop_before_ret(hbody) else []
         words.extend(
             _emit(hbody, global_slots, entry, None, None, None, None, string_addrs)
             + extra
