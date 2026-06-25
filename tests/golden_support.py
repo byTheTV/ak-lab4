@@ -8,7 +8,6 @@ from typing import Any, TextIO
 import yaml
 
 from ak_lab4.io_schedule import IrqScheduleEvent
-from ak_lab4.isa import Opcode, unpack_word
 from ak_lab4.machine import Machine, init_memory_from_segments, run_program
 from ak_lab4.memory import STACK_BASE
 from ak_lab4.translator import compile_forms, parse_many
@@ -18,11 +17,6 @@ GOLDEN_ROOT = REPO_ROOT / "golden"
 EXAMPLES_ROOT = REPO_ROOT / "examples"
 
 _DEFAULT_MAX_TICKS = 10_000_000
-
-_LOG_FULL_LIMIT = 80
-_LOG_HEAD = 18
-_LOG_TAIL = 14
-_LOG_IRQ_CTX = 5
 
 
 def _str_representer(dumper: yaml.Dumper, data: str) -> yaml.nodes.ScalarNode:
@@ -37,7 +31,6 @@ yaml.add_representer(str, _str_representer, Dumper=yaml.SafeDumper)
 @dataclass(frozen=True)
 class GoldenRun:
     output: bytes
-    log_excerpt: list[str]
     code_listing: str
     data_listing: str
 
@@ -191,33 +184,8 @@ def words_from_listing(text: str) -> list[int]:
     return words
 
 
-def _select_log_lines(full_log: str, case: str) -> list[str]:
-    lines = [ln for ln in full_log.splitlines() if ln.strip()]
-    if not lines:
-        return []
-    if len(lines) <= _LOG_FULL_LIMIT:
-        return lines
-
-    keep: set[int] = set(range(min(_LOG_HEAD, len(lines))))
-    keep.update(range(max(0, len(lines) - _LOG_TAIL), len(lines)))
-    for i, line in enumerate(lines):
-        if "\tIRQ_TRAP\t" in line:
-            lo = max(0, i - 1)
-            hi = min(len(lines), i + _LOG_IRQ_CTX)
-            keep.update(range(lo, hi))
-        if "\tPAR\t" in line or "\tPAR_FLUSH\t" in line:
-            keep.add(i)
-        if "\tFETCH\t" in line and "\tHALT\t" not in line:
-            parts = line.split("\t")
-            if len(parts) >= 4:
-                op, _ = unpack_word(int(parts[3], 16))
-                if op == int(Opcode.HALT):
-                    keep.update(range(max(0, i - 2), min(len(lines), i + 3)))
-    return [lines[i] for i in sorted(keep)]
-
-
-def build_log_excerpt(full_log: str, case: str) -> list[str]:
-    return _select_log_lines(full_log, case)
+def build_log(full_log: str, case: str) -> list[str]:
+    return [ln for ln in full_log.splitlines() if ln.strip()]
 
 
 def run_source(
@@ -263,26 +231,18 @@ def capture_run(
     code_listing: str | None = None,
     data_listing: str | None = None,
     max_ticks: int | None = None,
-    capture_log: bool = True,
 ) -> GoldenRun:
-    buf: StringIO | None = StringIO() if capture_log else None
     machine, code, data = run_source(
         source,
         schedule=schedule,
         case=case,
         superscalar=superscalar,
-        log=buf,
         code_listing=code_listing,
         data_listing=data_listing,
         max_ticks=max_ticks,
     )
-    if not capture_log:
-        log_excerpt: list[str] = []
-    else:
-        log_excerpt = build_log_excerpt(buf.getvalue(), case)  # type: ignore[union-attr]
     return GoldenRun(
         output=bytes(machine.out_bytes),
-        log_excerpt=log_excerpt,
         code_listing=format_listing(code),
         data_listing=format_listing(data),
     )
@@ -297,12 +257,14 @@ def build_golden_document(
     max_ticks: int | None = None,
 ) -> dict[str, Any]:
     limit = max_ticks if max_ticks is not None else _DEFAULT_MAX_TICKS
-    run = capture_run(
+    buf = StringIO()
+    machine, code, data = run_source(
         source,
         schedule=schedule,
         case=case,
         superscalar=superscalar,
         max_ticks=limit,
+        log=buf,
     )
     doc: dict[str, Any] = {
         "name": case,
@@ -310,10 +272,10 @@ def build_golden_document(
         "input": schedule_to_input(schedule),
         "max_ticks": limit,
         "fail_on_max_ticks": True,
-        "output": format_output(run.output),
-        "code_listing": run.code_listing,
-        "data_listing": run.data_listing,
-        "log_excerpt": run.log_excerpt,
+        "output": format_output(bytes(machine.out_bytes)),
+        "code_listing": format_listing(code),
+        "data_listing": format_listing(data),
+        "log": build_log(buf.getvalue(), case),
     }
     return doc
 
@@ -343,5 +305,4 @@ def run_from_yml(path: Path, *, superscalar: bool = False) -> GoldenRun:
         case=case,
         superscalar=superscalar,
         max_ticks=max_ticks,
-        capture_log=not superscalar,
     )

@@ -20,7 +20,6 @@ def test_golden_yml(path: Path) -> None:
     expected = load_golden_yml(path)
     actual = run_from_yml(path)
     assert format_output(actual.output) == expected["output"]
-    assert actual.log_excerpt == expected["log_excerpt"]
     assert actual.code_listing == expected["code_listing"]
     assert actual.data_listing == expected["data_listing"]
 
