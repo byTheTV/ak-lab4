@@ -18,6 +18,7 @@ EXAMPLES_ROOT = REPO_ROOT / "examples"
 
 _DEFAULT_MAX_TICKS = 10_000_000
 
+
 def _str_representer(dumper: yaml.Dumper, data: str) -> yaml.nodes.ScalarNode:
     if "\n" in data:
         return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
